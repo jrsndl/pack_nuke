@@ -1,14 +1,37 @@
 # import necessary
-import sys
 import nuke
-import shutil
-import threading
 import os
 import glob
 import re
-import subprocess
-import webbrowser
-import time
+import pprint
+
+
+def get_default_category():
+    default_category = {
+        "default_category": {
+            "path": {
+                "root_template": "{job}/{folder[name]}/{category}",
+                "root_template_relink": "{job}/{folder[name]}/{category}",
+                "top_folder": "{job}/{folder[name]}/{category}",
+                "top_folder_relink": "{job}/{folder[name]}/{category}"
+            },
+            "filter_options": {
+                "skip_disconnected": True,
+                "skip_disabled": True,
+                "combine_filters": "AND"
+            },
+            "filters": [
+                {
+                    "source": "File Name",
+                    "search": ".*\\.(\\w{2,3,4})$",
+                    "check": [],
+                    "token_name": "extension",
+                    "invert": False
+                }
+            ]
+        }
+    }
+    return default_category
 
 
 def get_nuke_pack_project_settings():
@@ -20,7 +43,7 @@ def get_nuke_pack_project_settings():
 
     settings = {"toVendor1": {
         "job": {
-            "job_name_default": "PackNuke_Dazzle2Vendor1_{YYYY}-{MM}-{DD}_v000",
+            "job_name_default": "PackNuke_Dazzle2Vendor1_{yyyy}-{mm}-{dd}_v000",
             "job_name_check": "PackNuke_Dazzle2Vendor1_20d\\d-\\d\\d-\\d\\d_v\\d\\d\\d",
             "job_root": "{project[name]}/out/packNuke/Dazzle2Vendor1"
         },
@@ -56,13 +79,13 @@ def get_nuke_pack_project_settings():
                 "filter_options": {
                     "skip_disconnected": True,
                     "skip_disabled": True,
-                    "combine_filters": "AND"
+                    "combine_filters": "OR"
                 },
                 "filters": [
                     {
                         "source": "File Name",
                         "search": ".*\\.(\\w{2,3,4})$",
-                        "check": ["exr", "jpg", "jpeg"],
+                        "check": ["exr", "jpg", "jpeg", "mov"],
                         "token_name": "extension",
                         "invert": False
                     },
@@ -125,8 +148,15 @@ def get_anatomy():
         "user": "john.doe",
         "project[name]": "DP1234_project",
         "project[code]": "dp1234_prj",
+        "project": {
+            "name": "DP1234_project",
+            "code": "dp1234_prj",
+        },
         "asset": "mw_119_12_0340",
         "folder[name]": "mw_119_12_0340",
+        "folder": {
+            "name": "mw_119_12_0340"
+        },
         "hierarchy": "shots/114_23",
         "parent": "114_23",
         "task[name]": "comp",
@@ -161,12 +191,11 @@ def get_anatomy():
         "pixel_aspect": 1.0,
         "fps": 25.0,
         "workfile": "path/to/workfile.nk"
-        }
+    }
     return anatomy
 
 
 def action_dialog():
-
     # for testing
     # TODO make action dialog, get use input, return anatomy for every workfile
 
@@ -184,7 +213,8 @@ def action_dialog():
     profile_name_first = list(settings)[0]
 
     profile_names = " ".join(list(settings))
-    job_default_folder = settings[profile_name_first]["job"]["job_name_default"]
+    job_default_folder = settings[profile_name_first]["job"][
+        "job_name_default"]
     job_default_check = settings[profile_name_first]["job"]["job_name_check"]
     job_default_path = settings[profile_name_first]["job"]["job_root"]
 
@@ -192,19 +222,21 @@ def action_dialog():
     # TODO
 
     # fake user input
-    user_job_folder = job_default_folder.format_map(Default(anatomy)).replace("\\", "/")
-    user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\", "/")
+    user_job_folder = job_default_folder.format(**anatomy).replace("\\", "/")
+    user_job_path = job_default_path.format(**anatomy).replace("\\", "/")
     user_job_profile = profile_name_first
 
     # validate user input
     if not re.match(job_default_check, user_job_folder):
         print("Error! Make sure folder name matches convention")
 
-    job_destination = user_job_path + "/" + user_job_folder # no backslash, nuke hates it
+    job_destination = user_job_path + "/" + user_job_folder  # no backslash, nuke hates it
 
     # now get a list of "workfile anatomies"
     # will fake it for now
-    anatomies = [get_anatomy()]
+    anatomy = get_anatomy()
+    anatomy['job'] = user_job_folder  # add job name
+    anatomies = [anatomy]  # fake it for one Nuke script
 
     return anatomies, job_destination, settings.get(user_job_profile)
 
@@ -220,6 +252,8 @@ class PackNukeScript:
         self.font_items = []
         self.gizmo_items = []
         self.loaded_plugins = []
+        self.categories = {}
+        self.media_copy_list = []
 
     def bytes_to_string(self, size_bytes):
         size_bytes = float(size_bytes)
@@ -253,7 +287,8 @@ class PackNukeScript:
 
         return val
 
-    def prepend_project_directory(self, path, project_dir=None, evaluate_project_directory=True):
+    def prepend_project_directory(self, path, project_dir=None,
+                                  evaluate_project_directory=True):
         """
         prepend_project_directory: merge project directory with path.
         :param path: Path to be merged with
@@ -309,7 +344,8 @@ class PackNukeScript:
                 # get each view name in the nuke comp
                 view = rtn.split(' ')[-2]
                 # replace in path and append to view_files
-                view_files.append(knob_path.replace(r'%v', view).replace(r'%V', view))
+                view_files.append(
+                    knob_path.replace(r'%v', view).replace(r'%V', view))
         else:
             # if if stereo files not used, do not replace anything
             view_files = [knob_path]
@@ -325,11 +361,13 @@ class PackNukeScript:
 
             # try appending project root folder, if the dir does not exist
             if not os.path.exists(knob_path_parent_dir):
-                knob_path_project_dir = self.prepend_project_directory(knob_path_parent_dir)
+                knob_path_project_dir = self.prepend_project_directory(
+                    knob_path_parent_dir)
                 if os.path.isdir(knob_path_project_dir):
                     project_dir = True
                     knob_path_parent_dir = knob_path_project_dir
-                    knob_path_tcl = self.prepend_project_directory(knob_path_tcl)
+                    knob_path_tcl = self.prepend_project_directory(
+                        knob_path_tcl)
 
             # check if the parent dir exists
             if os.path.exists(knob_path_parent_dir):
@@ -352,7 +390,8 @@ class PackNukeScript:
                     wildcards = ''
                     for i in range(printf_count):
                         wildcards += '?'
-                    wildcard_path = knob_path_tcl.replace(regex_file, wildcards)
+                    wildcard_path = knob_path_tcl.replace(regex_file,
+                                                          wildcards)
                     # get all files in directory
                     files = glob.glob(wildcard_path)
                     for each_file in files:
@@ -369,9 +408,12 @@ class PackNukeScript:
                     for i in range(wildcard_count + 1):
                         wildcards += '?'
                     # get full filename with wildcard replaced
-                    filename = filename_split[-len(filename_split)] + wildcards + filename_split[-1]
+                    filename = filename_split[
+                                   -len(filename_split)] + wildcards + \
+                               filename_split[-1]
                     # full file path
-                    wildcard_path = os.path.join(knob_path_parent_dir, filename).replace('\\', '/')
+                    wildcard_path = os.path.join(knob_path_parent_dir,
+                                                 filename).replace('\\', '/')
 
                     # get all files that match wildcard pattern
                     files = glob.glob(wildcard_path)
@@ -385,8 +427,10 @@ class PackNukeScript:
                         paths.append(knob_path_tcl)
 
                     # check if it is a relative (project directory) path
-                    elif os.path.isfile(self.prepend_project_directory(knob_path_tcl)):
-                        paths.append(self.prepend_project_directory(knob_path_tcl))
+                    elif os.path.isfile(
+                            self.prepend_project_directory(knob_path_tcl)):
+                        paths.append(
+                            self.prepend_project_directory(knob_path_tcl))
         # return result
         return paths, project_dir
 
@@ -405,9 +449,16 @@ class PackNukeScript:
         def is_node_disconnected(node):
 
             disconnected = False
-            if len(node.dependent()) == 0 and len(node.dependencies()) == 0:
-                if node.minInputs() > 0 and node.maxOutputs() > 0:
-                    disconnected = True
+            # can have outputs and has no outputs
+            no_outs = False
+            no_ins = False
+            if node.dependent() == []:
+                no_outs = True
+            if node.dependencies() == []:
+                no_ins = True
+            if no_outs and no_ins:
+                disconnected = True
+
             return disconnected
 
         def is_node_gizmo(node):
@@ -415,7 +466,8 @@ class PackNukeScript:
 
             gizmo = type(node) == nuke.Gizmo
             if gizmo:
-                return node.Class() if node.Class().endswith('.gizmo') else node.Class() + '.gizmo'
+                return node.Class() if node.Class().endswith(
+                    '.gizmo') else node.Class() + '.gizmo'
             else:
                 return ''
 
@@ -434,14 +486,16 @@ class PackNukeScript:
                         custom_plugins.append(plugin)
             return custom_plugins
 
-        def store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected):
+        def store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled,
+                             node_disconnected):
 
-            if gizmo_name is not '':
+            if gizmo_name != '':
 
                 gizmo_path_found = False
                 gizmo_path = ''
                 for each_plugin_path in nuke.pluginPath():
-                    gizmo_path = os.path.join(each_plugin_path, gizmo_name).replace('\\', '/')
+                    gizmo_path = os.path.join(each_plugin_path,
+                                              gizmo_name).replace('\\', '/')
                     if os.path.isfile(gizmo_path):
                         gizmo_path_found = False
                         break
@@ -463,7 +517,8 @@ class PackNukeScript:
                                 if g['node_disabled'] == node_disabled:
                                     if g['node_disconnected'] == node_disconnected:
                                         already_found = True
-                                        gizmo_items[i]['nodes'].append(each_node)
+                                        gizmo_items[i]['nodes'].append(
+                                            each_node)
                             i += 1
                         if not already_found:
                             gizmo_items.append(gizmo_item)
@@ -479,7 +534,8 @@ class PackNukeScript:
                 # get all fonts as list of lists ["Open Sans", "Regular", "fontapath", somenumber]:
                 all_fonts = nuke.getFonts()
                 for found_font in font_items:
-                    to_match = found_font['font_family'] + found_font['font_style']
+                    to_match = found_font['font_family'] + found_font[
+                        'font_style']
                     found_font['path'] = None
                     for font in all_fonts:
                         check = font[0] + font[1]
@@ -497,6 +553,9 @@ class PackNukeScript:
 
             # get total file size
             total_size = 0
+            if real_knob_paths is None:
+                return None
+
             for each_file in real_knob_paths:
                 size = os.path.getsize(each_file)
                 total_size += size
@@ -510,19 +569,26 @@ class PackNukeScript:
             item = {
                 'node': node,
                 'knob': knob,
+                'node_class': str(node.Class()),
+                'node_name': str(node.fullName()),
                 'exists': exists,
                 'found_path': path,
                 'all_files_with_sizes': all_files_with_sizes,
                 'total_size': total_size,
                 'project_dir': project_dir,
                 'node_disabled': disabled,
-                'node_disconnected': disconnected
+                'node_disconnected': disconnected,
+                'categories': [],
+                'category_files': {},
+                'tokens': {},
+                'duplicate_of': None
             }
             return item
 
         # progress bar total value
         all_nodes = nuke.allNodes(recurseGroups=True)
         progress_total = len(all_nodes)
+        print("Total Nodes: {}".format(progress_total))
 
         # container for all loaded files
         media_items = []
@@ -543,8 +609,10 @@ class PackNukeScript:
 
             # check if node is a gizmo
             gizmo_name = is_node_gizmo(each_node)
-            if gizmo_name is not '':
-                gizmo_items = store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected)
+            if gizmo_name != '':
+                gizmo_items = store_gizmo_item(gizmo_name, gizmo_items,
+                                               each_node, node_disabled,
+                                               node_disconnected)
 
             # Check all knobs in Node
             for each_knob in each_node.knobs():
@@ -554,9 +622,19 @@ class PackNukeScript:
                 if curr_knob.Class() == 'File_Knob':
                     # only add if a path has been entered
                     found_path = curr_knob.getValue()
-                    if found_path is not '':
-                        media_item = get_media_item(each_node, curr_knob, found_path, node_disabled, node_disconnected)
-                        media_items.append(media_item)
+                    if '[' in found_path:
+                        found_path = curr_knob.evaluate()
+                    if found_path != '':
+                        if found_path.endswith('.ttf'):
+                            print("Found font {}".format(found_path))
+
+                        else:
+                            media_item = get_media_item(each_node, curr_knob,
+                                                        found_path,
+                                                        node_disabled,
+                                                        node_disconnected)
+                            if media_item is not None:
+                                media_items.append(media_item)
 
                 # Font resource
                 elif curr_knob.Class() == 'FreeType_Knob':
@@ -573,8 +651,9 @@ class PackNukeScript:
                         }
                         font_items.append(one_font)
 
-            percent = int(round(float(i_node) / float(progress_total) * 100 / 2))
-            print('Done {}% of Nodes'.format(percent))
+            percent = int(
+                round(float(i_node) / float(progress_total) * 100 / 2))
+            # print('Done {}% of Nodes'.format(percent))
             i_node += 1
 
         self.media_items = media_items
@@ -584,59 +663,134 @@ class PackNukeScript:
 
     def media_items_to_categories(self):
 
-        def is_media_item_matching(media_item, paths, filter_options, filter_list):
-            # TODO match filters
-            return True
+        def is_media_item_matching(media_item, paths, filter_options,
+                                   filter_list):
 
+            def match_regex(filter, source):
+                """
+                Checks if the filter matches the source by regex
+                """
+                try:
+                    _re = re.compile(filter['search'])
+                except:
+                    return None
 
-        default_category = {
-            "default_category": {
-                "path": {
-                    "root_template": "{job}/{folder[name]}/{category}",
-                    "root_template_relink": "{job}/{folder[name]}/{category}",
-                    "top_folder": "{job}/{folder[name]}/{category}",
-                    "top_folder_relink": "{job}/{folder[name]}/{category}"
-                },
-                "filter_options": {
-                    "skip_disconnected": True,
-                    "skip_disabled": True,
-                    "combine_filters": "AND"
-                },
-                "filters": [
-                    {
-                        "source": "File Name",
-                        "search": ".*\\.(\\w{2,3,4})$",
-                        "check": [],
-                        "token_name": "extension",
-                        "invert": False
-                    }
-                ]
-            }
-        }
+                result = re.search(filter['search'], source)
+                if filter['check']:
+                    # we have something to check agains
+                    if result in filter['check']:
+                        if not filter['invert']:
+                            return result
+                        else:
+                            return None
+                    else:
+                        if not filter['invert']:
+                            return None
+                        else:
+                            return result
+                else:
+                    # not looking for match, just if regex found something
+                    if not filter['invert']:
+                        return result
+                    else:
+                        return None
 
-        categories = self.settings.get('categories')
-        if not categories:
+            def match_node_class(filter, node_class):
+                """
+                Filter check is ignored, only matches the class name
+                """
+                if node_class is None:
+                    return None
+
+                node_list = filter['search'].strip().split(' ')
+                if node_list is None or len(node_list) == 0:
+                    return None
+
+                if node_class in node_list:
+                    if not filter['invert']:
+                        return node_class
+                    else:
+                        return None
+                else:
+                    if not filter['invert']:
+                        return None
+                    else:
+                        return node_class
+
+            if filter_options['skip_disconnected'] and media_item[
+                'node_disconnected']:
+                # should skip disconnected
+                return False, None
+            if filter_options['skip_disabled'] and media_item['node_disabled']:
+                # should skip disabled
+                return False, None
+            if media_item['all_files_with_sizes'] and len(
+                    media_item['all_files_with_sizes']) > 0:
+                full_path = media_item['all_files_with_sizes'][0][0]
+                _dir, file_name = os.path.split(full_path)
+            else:
+                # no file, no match
+                return False, None
+
+            matches = 0
+            tokens = {}
+            for one_filter in filter_list:
+                match = None
+                print("Looking for filter {}".format(one_filter['source']))
+                if one_filter['source'] == 'File Name':
+                    match = match_regex(one_filter, source=file_name)
+                elif one_filter['source'] == 'File Path':
+                    match = match_regex(one_filter, source=full_path)
+                elif one_filter['source'] == 'Node Class':
+                    match = match_node_class(one_filter,
+                                             media_item['node_class'])
+
+                if match is not None:
+                    tokens[one_filter['token_name']] = match
+                    matches += 1
+            print("Tokens {}, matches {}".format(tokens, matches))
+
+            if (filter_options[
+                    'combine_filters'].lower() == 'and' and matches == len(
+                    filter_list)) or (
+                    filter_options[
+                        'combine_filters'].lower() == 'or' and matches > 0):
+                # media item is matching filter!
+                return True, tokens
+            else:
+                return False, tokens
+
+        self.categories = self.settings.get('categories')
+        print("Categories {}".format(self.categories))
+        default_category = get_default_category()
+        if not self.categories:
             # no categories defined, take default
-            categories = {default_category}
+            self.categories = default_category
 
-        for category_name, category in categories.items():
-
+        for category_name, category in self.categories.items():
             # get path options
             paths = category.get('path')
+            print("Paths {}".format(paths))
             if not paths:
                 paths = default_category['default_category']['path']
             # get filter options
             filter_options = category.get('filter_options')
+            print("filter_options {}".format(filter_options))
             if not filter_options:
-                filter_options = default_category['default_category']['filter_options']
+                filter_options = default_category['default_category'][
+                    'filter_options']
             # get filters
             filter_list = category.get('filters')
+            print("filter_list {}".format(filter_list))
             if not filter_list:
                 filter_list = default_category['default_category']['filters']
 
             for media_item in self.media_items:
-                match = is_media_item_matching(media_item, paths, filter_options, filter_list)
-                if match:
+                matching, more_tokens = is_media_item_matching(media_item,
+                                                               paths,
+                                                               filter_options,
+                                                               filter_list)
+                if matching:
                     # add category name to media item
                     cats = media_item.get('categories')
                     if cats is not None:
@@ -644,35 +798,106 @@ class PackNukeScript:
                     else:
                         media_item['categories'] = [category_name]
 
+                    print("Added match to categories: {}".format(
+                        media_item['categories']))
 
+                    # add tokens to media item
+                    tokens = media_item.get('tokens')
+                    if tokens is not None:
+                        media_item['tokens'].update(more_tokens)
+                    else:
+                        media_item['tokens'] = more_tokens
 
+    def find_media_duplicities(self):
 
+        for media_item in self.media_items:
+            if media_item['duplicate_of'] is None:
+                for check_item in self.media_items:
+                    if check_item == media_item:
+                        continue
+                    if media_item['all_files_with_sizes'] == check_item[
+                        'all_files_with_sizes']:
+                        check_item['duplicate_of'] = media_item
 
+    def media_items_to_paths(self):
+        """
+        Fills media_item['category_files'][category_name]
+        template and template_relink are paths with tokens filled
+        target and relink are list of paths for every file
+        """
 
+        class Default(dict):
+            def __missing__(self, key):
+                return key
 
+        for media_item in self.media_items:
+            cats = media_item.get('categories')
+            all_tokens = {**self.anatomy, **media_item['tokens']}
+            all_file_names = []
+            for one_file in media_item['all_files_with_sizes']:
+                all_file_names.append(one_file[0].split('/')[-1])
 
+            if cats is not None:
+                for one_category in cats:
+                    all_tokens['category'] = one_category
+                    all_tokens['node[name]'] = media_item['node_name']
+                    all_tokens['node[class]'] = media_item['node_class']
+                    cat_set = self.settings['categories'][one_category]
+                    r_t = cat_set['path']['root_template'].format(
+                        **all_tokens).replace("\\", "/")
+                    r_t_r = cat_set['path']['root_template_relink'].format(
+                        **all_tokens).replace("\\", "/")
+                    t_f = cat_set['path']['top_folder'].format(
+                        **all_tokens).replace("\\", "/")
+                    t_f_r = cat_set['path']['top_folder_relink'].format(
+                        **all_tokens).replace("\\", "/")
 
+                    media_item['category_files'][one_category] = {
+                        'template': r_t + '/' + t_f,
+                        'template_relink': r_t_r + '/' + t_f_r,
+                        'target': [r_t + '/' + t_f + '/' + f for f in
+                                   all_file_names],
+                        'relink': [r_t_r + '/' + t_f_r + '/' + f for f in
+                                   all_file_names]
+                    }
 
+    def prepare_media_copy_list(self):
 
-
-
+        for media_item in self.media_items:
+            if media_item['duplicate_of'] is None:
+                for one_category, paths in media_item[
+                    'category_files'].items():
+                    for i in range(0, len(media_item['all_files_with_sizes'])):
+                        self.media_copy_list.append(
+                            [media_item['all_files_with_sizes'][i][0],
+                             paths['target'][i]])
 
     def prepare_script(self):
 
-        #script info
+        # script info
         nuke_script = nuke.root().name()
         nuke_script_size = os.path.getsize(nuke_script)
 
         self.read_comp_data()
 
-        # filter categories
-        ble = self.media_items_to_categories()
+        # mark media items that are used more than once
+        self.find_media_duplicities()
 
-        # deduplicate categories
+        # filter categories
+        self.media_items_to_categories()
+
+        # generate target paths for every category in every media item
+        self.media_items_to_paths()
 
         # prepare copy list
+        self.prepare_media_copy_list()
 
         # save report (start)
+        print("media items:\n")
+        pprint.pprint(self.media_items)
+
+        print("\n\nmedia copy list:\n")
+        pprint.pprint(self.media_copy_list)
 
     def process_script(self):
         pass
@@ -703,6 +928,8 @@ if __name__ == "__main__":
         # process each nuke script
         for anatomy in anatomies:
             one_nuke = PackNukeScript(anatomy, job_destination, settings)
+            one_nuke.prepare_script()
+            one_nuke.process_script()
 
 
 
