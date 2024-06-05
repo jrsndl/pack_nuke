@@ -12,8 +12,8 @@ def get_default_category():
             "path": {
                 "root_template": "{job}/{folder[name]}/{category}",
                 "root_template_relink": "{job}/{folder[name]}/{category}",
-                "top_folder": "{job}/{folder[name]}/{category}",
-                "top_folder_relink": "{job}/{folder[name]}/{category}"
+                "top_folder": "{node}",
+                "top_folder_relink": "{node}"
             },
             "filter_options": {
                 "skip_disconnected": True,
@@ -45,22 +45,22 @@ def get_nuke_pack_project_settings():
         "job": {
             "job_name_default": "PackNuke_Dazzle2Vendor1_{yyyy}-{mm}-{dd}_v000",
             "job_name_check": "PackNuke_Dazzle2Vendor1_20\d\d-\d\d-\d\d_v\d\d\d",
-            "job_root": "{project[name]}/out/packNuke/Dazzle2Vendor1"
+            "job_root": "{root[work]}/{project[name]}/out/packNuke/Dazzle2Vendor1"
         },
         "nuke_scripts": {
             "nuke_scripts_source": {
                 "nuke_scripts_source_copy": True,
-                "nuke_scripts_source_path": "{job[root]}/{job[name]}/{folder[name]}/{script_name}_source.nk"
+                "nuke_scripts_source_path": "{job}/{folder[name]}/{script_name}_source.nk"
             },
             "nuke_scripts_package": {
                 "nuke_scripts_package_copy": True,
-                "nuke_scripts_package_path": "{job[root]}/{job[name]}/{folder[name]}/{script_name}_check.nk",
+                "nuke_scripts_package_path": "{job}/{folder[name]}/{script_name}_check.nk",
                 "nuke_scripts_package_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_source.nk",
                 "nuke_scripts_package_relative": True
             },
             "nuke_scripts_target": {
                 "nuke_scripts_target_copy": True,
-                "nuke_scripts_target_path": "{job[root]}/{job[name]}/{folder[name]}/{script_name}_check.nk",
+                "nuke_scripts_target_path": "{job}/{folder[name]}/{script_name}_check.nk",
                 "nuke_scripts_target_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_source.nk",
                 "nuke_scripts_target_relative": True
             }
@@ -73,8 +73,8 @@ def get_nuke_pack_project_settings():
                 "path": {
                     "root_template": "{job}/{folder[name]}/{category}",
                     "root_template_relink": "{job}/{folder[name]}/{category}",
-                    "top_folder": "{job}/{folder[name]}/{category}",
-                    "top_folder_relink": "{job}/{folder[name]}/{category}"
+                    "top_folder": "{node}",
+                    "top_folder_relink": "{node}"
                 },
                 "filter_options": {
                     "skip_disconnected": False,
@@ -143,6 +143,10 @@ def get_anatomy():
     # TODO get anatomy
 
     anatomy = {
+        "root[work]": "z:",
+        "root": {
+            "work": "z:"
+        },
         "studio[name]": "Dazzle",
         "studio[code]": "dzl",
         "user": "john.doe",
@@ -222,10 +226,12 @@ def action_dialog():
     # TODO
 
     # fake user input
-    # user_job_folder = job_default_folder.format_map(Default(anatomy)).replace("\\", "/")
-    # user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\", "/")
-    user_job_folder = job_default_folder.format(**anatomy).replace("\\", "/")
-    user_job_path = job_default_path.format(**anatomy).replace("\\", "/")
+    user_job_folder = job_default_folder.format_map(Default(anatomy)).replace(
+        "\\", "/")
+    user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\",
+                                                                          "/")
+    # user_job_folder = job_default_folder.format(**anatomy).replace("\\", "/")
+    # user_job_path = job_default_path.format(**anatomy).replace("\\", "/")
     user_job_profile = profile_name_first
 
     # validate user input
@@ -239,7 +245,9 @@ def action_dialog():
     # now get a list of "workfile anatomies"
     # will fake it for now
     anatomy = get_anatomy()
-    anatomy['job'] = user_job_folder  # add job name
+    anatomy['job'] = job_destination  # add job name
+    anatomy['job_path'] = user_job_path
+    anatomy['job_folder'] = user_job_folder
     anatomies = [anatomy]  # fake it for one Nuke script
 
     return anatomies, job_destination, settings.get(user_job_profile)
@@ -906,8 +914,8 @@ class PackNukeScript:
             if cats is not None:
                 for one_category in cats:
                     all_tokens['category'] = one_category
-                    all_tokens['node[name]'] = media_item['node_name']
-                    all_tokens['node[class]'] = media_item['node_class']
+                    all_tokens['node'] = media_item['node_name']
+                    all_tokens['node_class'] = media_item['node_class']
                     cat_set = self.settings['categories'][one_category]
                     r_t = cat_set['path']['root_template'].format(
                         **all_tokens).replace("\\", "/")
@@ -918,13 +926,17 @@ class PackNukeScript:
                     t_f_r = cat_set['path']['top_folder_relink'].format(
                         **all_tokens).replace("\\", "/")
 
+                    targets = []
+                    relinks = []
+                    for one_file in all_file_names:
+                        targets.append(r_t + '/' + t_f + '/' + one_file)
+                        relinks.append(r_t_r + '/' + t_f_r + '/' + one_file)
+
                     media_item['category_files'][one_category] = {
                         'template': r_t + '/' + t_f,
                         'template_relink': r_t_r + '/' + t_f_r,
-                        'target': [r_t + '/' + t_f + '/' + f for f in
-                                   all_file_names],
-                        'relink': [r_t_r + '/' + t_f_r + '/' + f for f in
-                                   all_file_names]
+                        'target': targets,
+                        'relink': relinks
                     }
 
     def font_items_to_paths(self):
@@ -1049,6 +1061,8 @@ if __name__ == "__main__":
     # settings is a dict containing user picked packing settings
     anatomies, job_destination, settings = action_dialog()
     if anatomies and len(anatomies) > 0:
+        pprint.pprint(anatomies)
+        print("\n\n\n")
         # process each nuke script
         for anatomy in anatomies:
             one_nuke = PackNukeScript(anatomy, job_destination, settings)
