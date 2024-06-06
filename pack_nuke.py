@@ -4,7 +4,10 @@ import os
 import glob
 import re
 import pprint
-
+import shutil
+import subprocess
+import platform
+import timeit
 
 def get_default_category():
     default_category = {
@@ -150,14 +153,11 @@ def get_anatomy():
         "studio[name]": "Dazzle",
         "studio[code]": "dzl",
         "user": "john.doe",
-        "project[name]": "DP1234_project",
-        "project[code]": "dp1234_prj",
         "project": {
-            "name": "DP1234_project",
+            "name": "T027_cgTests_Sept23",
             "code": "dp1234_prj",
         },
         "asset": "mw_119_12_0340",
-        "folder[name]": "mw_119_12_0340",
         "folder": {
             "name": "mw_119_12_0340"
         },
@@ -217,8 +217,7 @@ def action_dialog():
     profile_name_first = list(settings)[0]
 
     profile_names = " ".join(list(settings))
-    job_default_folder = settings[profile_name_first]["job"][
-        "job_name_default"]
+    job_default_folder = settings[profile_name_first]["job"]["job_name_default"]
     job_default_check = settings[profile_name_first]["job"]["job_name_check"]
     job_default_path = settings[profile_name_first]["job"]["job_root"]
 
@@ -226,19 +225,15 @@ def action_dialog():
     # TODO
 
     # fake user input
-    user_job_folder = job_default_folder.format_map(Default(anatomy)).replace(
-        "\\", "/")
-    user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\",
-                                                                          "/")
+    user_job_folder = job_default_folder.format_map(Default(anatomy)).replace("\\", "/")
+    user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\", "/")
     # user_job_folder = job_default_folder.format(**anatomy).replace("\\", "/")
     # user_job_path = job_default_path.format(**anatomy).replace("\\", "/")
     user_job_profile = profile_name_first
 
     # validate user input
     if not re.match(job_default_check, user_job_folder):
-        print(
-            "Error! Make sure folder name matches convention:\n{}\n{}".format(
-                job_default_check, user_job_folder))
+        print("Error! Make sure folder name matches convention:\n{}\n{}".format(job_default_check, user_job_folder))
 
     job_destination = user_job_path + "/" + user_job_folder  # no backslash, nuke hates it
 
@@ -266,6 +261,20 @@ class PackNukeScript:
         self.loaded_plugins = []
         self.categories = {}
         self.media_copy_list = []
+
+    def printf_to_hashes(self, path):
+
+        path = path.replace('\\', '/')
+        name = path.split('/')[-1]
+
+        regex = re.compile('%..d')
+        printfCount = -1
+        try:
+            regexFile = regex.findall(name)[0]
+            printfCount = int(regexFile[1:-1])
+        except Exception as e:
+            # no printf used
+            pass
 
     def bytes_to_string(self, size_bytes):
         size_bytes = float(size_bytes)
@@ -299,8 +308,7 @@ class PackNukeScript:
 
         return val
 
-    def prepend_project_directory(self, path, project_dir=None,
-                                  evaluate_project_directory=True):
+    def prepend_project_directory(self, path, project_dir=None, evaluate_project_directory=True):
         """
         prepend_project_directory: merge project directory with path.
         :param path: Path to be merged with
@@ -356,8 +364,7 @@ class PackNukeScript:
                 # get each view name in the nuke comp
                 view = rtn.split(' ')[-2]
                 # replace in path and append to view_files
-                view_files.append(
-                    knob_path.replace(r'%v', view).replace(r'%V', view))
+                view_files.append(knob_path.replace(r'%v', view).replace(r'%V', view))
         else:
             # if if stereo files not used, do not replace anything
             view_files = [knob_path]
@@ -367,19 +374,18 @@ class PackNukeScript:
 
             # get TCL evaluated string
             knob_path_tcl = self.eval_tcl(knob_path)
+            hash_path = knob_path_tcl
 
             # get parent directory
             knob_path_parent_dir = os.path.dirname(knob_path_tcl)
 
             # try appending project root folder, if the dir does not exist
             if not os.path.exists(knob_path_parent_dir):
-                knob_path_project_dir = self.prepend_project_directory(
-                    knob_path_parent_dir)
+                knob_path_project_dir = self.prepend_project_directory(knob_path_parent_dir)
                 if os.path.isdir(knob_path_project_dir):
                     project_dir = True
                     knob_path_parent_dir = knob_path_project_dir
-                    knob_path_tcl = self.prepend_project_directory(
-                        knob_path_tcl)
+                    knob_path_tcl = self.prepend_project_directory(knob_path_tcl)
 
             # check if the parent dir exists
             if os.path.exists(knob_path_parent_dir):
@@ -402,12 +408,12 @@ class PackNukeScript:
                     wildcards = ''
                     for i in range(printf_count):
                         wildcards += '?'
-                    wildcard_path = knob_path_tcl.replace(regex_file,
-                                                          wildcards)
+                    wildcard_path = knob_path_tcl.replace(regex_file, wildcards)
                     # get all files in directory
                     files = glob.glob(wildcard_path)
                     for each_file in files:
                         paths.append(each_file.replace('\\', '/'))
+                    hash_path = wildcard_path.replace('?', '#')
 
                 # if hash notation is used for the sequence
                 elif '#' in filename:
@@ -420,17 +426,15 @@ class PackNukeScript:
                     for i in range(wildcard_count + 1):
                         wildcards += '?'
                     # get full filename with wildcard replaced
-                    filename = filename_split[
-                                   -len(filename_split)] + wildcards + \
-                               filename_split[-1]
+                    filename = filename_split[-len(filename_split)] + wildcards + filename_split[-1]
                     # full file path
-                    wildcard_path = os.path.join(knob_path_parent_dir,
-                                                 filename).replace('\\', '/')
+                    wildcard_path = os.path.join(knob_path_parent_dir, filename).replace('\\', '/')
 
                     # get all files that match wildcard pattern
                     files = glob.glob(wildcard_path)
                     for each_file in files:
                         paths.append(each_file.replace('\\', '/'))
+                    hash_path = wildcard_path.replace('?', '#')
 
                 # if not a sequence
                 else:
@@ -439,12 +443,11 @@ class PackNukeScript:
                         paths.append(knob_path_tcl)
 
                     # check if it is a relative (project directory) path
-                    elif os.path.isfile(
-                            self.prepend_project_directory(knob_path_tcl)):
-                        paths.append(
-                            self.prepend_project_directory(knob_path_tcl))
+                    elif os.path.isfile(self.prepend_project_directory(knob_path_tcl)):
+                        paths.append(self.prepend_project_directory(knob_path_tcl))
+
         # return result
-        return paths, project_dir
+        return paths, project_dir, hash_path
 
     def read_comp_data(self):
         """
@@ -478,8 +481,7 @@ class PackNukeScript:
 
             gizmo = type(node) == nuke.Gizmo
             if gizmo:
-                return node.Class() if node.Class().endswith(
-                    '.gizmo') else node.Class() + '.gizmo'
+                return node.Class() if node.Class().endswith('.gizmo') else node.Class() + '.gizmo'
             else:
                 return ''
 
@@ -498,16 +500,14 @@ class PackNukeScript:
                         custom_plugins.append(plugin)
             return custom_plugins
 
-        def store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled,
-                             node_disconnected):
+        def store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected):
 
             if gizmo_name != '':
 
                 gizmo_path_found = False
                 gizmo_path = ''
                 for each_plugin_path in nuke.pluginPath():
-                    gizmo_path = os.path.join(each_plugin_path,
-                                              gizmo_name).replace('\\', '/')
+                    gizmo_path = os.path.join(each_plugin_path, gizmo_name).replace('\\', '/')
                     if os.path.isfile(gizmo_path):
                         gizmo_path_found = False
                         break
@@ -529,8 +529,7 @@ class PackNukeScript:
                                 if g['node_disabled'] == node_disabled:
                                     if g['node_disconnected'] == node_disconnected:
                                         already_found = True
-                                        gizmo_items[i]['nodes'].append(
-                                            each_node)
+                                        gizmo_items[i]['nodes'].append(each_node)
                             i += 1
                         if not already_found:
                             gizmo_items.append(gizmo_item)
@@ -562,8 +561,7 @@ class PackNukeScript:
                                 break
                     else:
                         # need to find the path
-                        to_match = found_font['font_family'] + found_font[
-                            'font_style']
+                        to_match = found_font['font_family'] + found_font['font_style']
                         found_font['path'] = None
                         for font in all_fonts:
                             check = font[0] + font[1]
@@ -575,7 +573,7 @@ class PackNukeScript:
 
         def get_media_item(node, knob, path, disabled, disconnected):
             # get real paths (file path list + project dir bool)
-            real_knob_paths, project_dir = self.get_real_knob_paths(path)
+            real_knob_paths, project_dir, hash_path = self.get_real_knob_paths(path)
 
             # make new list for new paths with their per-file size included
             all_files_with_sizes = []
@@ -602,6 +600,7 @@ class PackNukeScript:
                 'node_name': str(node.fullName()),
                 'exists': exists,
                 'found_path': path,
+                'found_path_filter': hash_path.replace('#', '?'),
                 'all_files_with_sizes': all_files_with_sizes,
                 'total_size': total_size,
                 'project_dir': project_dir,
@@ -610,7 +609,8 @@ class PackNukeScript:
                 'categories': [],
                 'category_files': {},
                 'tokens': {},
-                'duplicate_of': None
+                'duplicate_of': None,
+                'exist_on_target': False
             }
             return item
 
@@ -638,9 +638,7 @@ class PackNukeScript:
             # check if node is a gizmo
             gizmo_name = is_node_gizmo(each_node)
             if gizmo_name != '':
-                gizmo_items = store_gizmo_item(gizmo_name, gizmo_items,
-                                               each_node, node_disabled,
-                                               node_disconnected)
+                gizmo_items = store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected)
 
             # Check all knobs in Node
             for each_knob in each_node.knobs():
@@ -673,9 +671,7 @@ class PackNukeScript:
 
                         else:
                             # file knob that is not a font
-                            media_item = get_media_item(each_node, curr_knob,
-                                                        found_path,
-                                                        node_disabled,
+                            media_item = get_media_item(each_node, curr_knob, found_path, node_disabled,
                                                         node_disconnected)
                             if media_item is not None:
                                 media_items.append(media_item)
@@ -702,8 +698,7 @@ class PackNukeScript:
                         }
                         font_items.append(one_font)
 
-            percent = int(
-                round(float(i_node) / float(progress_total) * 100 / 2))
+            percent = int(round(float(i_node) / float(progress_total) * 100 / 2))
             # print('Done {}% of Nodes'.format(percent))
             i_node += 1
 
@@ -714,8 +709,7 @@ class PackNukeScript:
 
     def media_items_to_categories(self):
 
-        def is_media_item_matching(media_item, paths, filter_options,
-                                   filter_list):
+        def is_media_item_matching(media_item, paths, filter_options, filter_list):
 
             def match_regex(filter, source):
                 """
@@ -776,24 +770,19 @@ class PackNukeScript:
                         # print("Match_class matched, 'cause of invert")
                         return node_class
 
-            if filter_options['skip_disconnected'] and media_item[
-                'node_disconnected']:
+            if filter_options['skip_disconnected'] and media_item['node_disconnected']:
                 # should skip disconnected
-                print("Media Item {} skipped: disconnected".format(
-                    media_item['node_name']))
+                print("Media Item {} skipped: disconnected".format(media_item['node_name']))
                 return False, None
             if filter_options['skip_disabled'] and media_item['node_disabled']:
                 # should skip disabled
-                print("Media Item {} skipped: disabled".format(
-                    media_item['node_name']))
+                print("Media Item {} skipped: disabled".format(media_item['node_name']))
                 return False, None
-            if media_item['all_files_with_sizes'] and len(
-                    media_item['all_files_with_sizes']) > 0:
+            if media_item['all_files_with_sizes'] and len(media_item['all_files_with_sizes']) > 0:
                 full_path = media_item['all_files_with_sizes'][0][0]
                 _dir, file_name = os.path.split(full_path)
             else:
-                print("Media Item {} skipped: no file found".format(
-                    media_item['node_name']))
+                print("Media Item {} skipped: no file found".format(media_item['node_name']))
                 # no file, no match
                 return False, None
 
@@ -806,19 +795,15 @@ class PackNukeScript:
                 elif one_filter['source'] == 'File Path':
                     match = match_regex(one_filter, source=full_path)
                 elif one_filter['source'] == 'Node Class':
-                    match = match_node_class(one_filter,
-                                             media_item['node_class'])
+                    match = match_node_class(one_filter, media_item['node_class'])
 
                 if match is not None:
                     tokens[one_filter['token_name']] = match
                     matches += 1
             print("Tokens {}, matches {}".format(tokens, matches))
 
-            if (filter_options[
-                    'combine_filters'].lower() == 'and' and matches == len(
-                    filter_list)) or (
-                    filter_options[
-                        'combine_filters'].lower() == 'or' and matches > 0):
+            if (filter_options['combine_filters'].lower() == 'and' and matches == len(filter_list)) or (
+                    filter_options['combine_filters'].lower() == 'or' and matches > 0):
                 # media item is matching filter!
                 return True, tokens
             else:
@@ -838,20 +823,15 @@ class PackNukeScript:
             # get filter options
             filter_options = category.get('filter_options')
             if not filter_options:
-                filter_options = default_category['default_category'][
-                    'filter_options']
+                filter_options = default_category['default_category']['filter_options']
             # get filters
             filter_list = category.get('filters')
             if not filter_list:
                 filter_list = default_category['default_category']['filters']
 
             for media_item in self.media_items:
-                print("media_items_to_categories: checking {} {}".format(
-                    media_item['node_name'], category_name))
-                matching, more_tokens = is_media_item_matching(media_item,
-                                                               paths,
-                                                               filter_options,
-                                                               filter_list)
+                print("media_items_to_categories: checking {} {}".format(media_item['node_name'], category_name))
+                matching, more_tokens = is_media_item_matching(media_item, paths, filter_options, filter_list)
                 if matching:
                     # add category name to media item
                     cats = media_item.get('categories')
@@ -859,9 +839,6 @@ class PackNukeScript:
                         media_item['categories'].append(category_name)
                     else:
                         media_item['categories'] = [category_name]
-
-                    # print("Added match to categories: {}".format(media_item['categories']))
-
                     # add tokens to media item
                     tokens = media_item.get('tokens')
                     if tokens is not None:
@@ -879,8 +856,7 @@ class PackNukeScript:
                 for check_item in self.media_items:
                     if check_item == media_item:
                         continue
-                    if media_item['all_files_with_sizes'] == check_item[
-                        'all_files_with_sizes']:
+                    if media_item['all_files_with_sizes'] == check_item['all_files_with_sizes']:
                         check_item['duplicate_of'] = media_item
 
     def find_font_duplicities(self):
@@ -917,25 +893,24 @@ class PackNukeScript:
                     all_tokens['node'] = media_item['node_name']
                     all_tokens['node_class'] = media_item['node_class']
                     cat_set = self.settings['categories'][one_category]
-                    r_t = cat_set['path']['root_template'].format(
-                        **all_tokens).replace("\\", "/")
-                    r_t_r = cat_set['path']['root_template_relink'].format(
-                        **all_tokens).replace("\\", "/")
-                    t_f = cat_set['path']['top_folder'].format(
-                        **all_tokens).replace("\\", "/")
-                    t_f_r = cat_set['path']['top_folder_relink'].format(
-                        **all_tokens).replace("\\", "/")
+                    r_t = cat_set['path']['root_template'].format(**all_tokens).replace("\\", "/")
+                    r_t_r = cat_set['path']['root_template_relink'].format(**all_tokens).replace("\\", "/")
+                    t_f = cat_set['path']['top_folder'].format(**all_tokens).replace("\\", "/")
+                    t_f_r = cat_set['path']['top_folder_relink'].format(**all_tokens).replace("\\", "/")
 
                     targets = []
                     relinks = []
                     for one_file in all_file_names:
-                        targets.append(r_t + '/' + t_f + '/' + one_file)
-                        relinks.append(r_t_r + '/' + t_f_r + '/' + one_file)
+                        target = r_t + '/' + t_f + '/' + one_file
+                        targets.append(target)
+                        if os.path.exists(target):
+                            relinks.append(r_t_r + '/' + t_f_r + '/' + one_file)
 
                     media_item['category_files'][one_category] = {
                         'template': r_t + '/' + t_f,
                         'template_relink': r_t_r + '/' + t_f_r,
                         'target': targets,
+                        'target_exists': False,
                         'relink': relinks
                     }
 
@@ -948,17 +923,14 @@ class PackNukeScript:
 
         _stngs = self.settings['fonts']
         for font_item in self.font_items:
-            tokens = {'node': font_item['node_name'],
-                      'class': font_item['node_class'],
+            tokens = {'node': font_item['node_name'], 'class': font_item['node_class'],
                       'font': font_item['font_family']}
             all_tokens = {**self.anatomy, **tokens}
             all_file_names = []
             file_name = font_item['path'].split('/')[-1]
 
-            r_t = _stngs['root_template'].format(**all_tokens).replace("\\",
-                                                                       "/")
-            r_t_r = _stngs['root_template_relink'].format(
-                **all_tokens).replace("\\", "/")
+            r_t = _stngs['root_template'].format(**all_tokens).replace("\\", "/")
+            r_t_r = _stngs['root_template_relink'].format(**all_tokens).replace("\\", "/")
 
             t_f = _stngs['top_folder'].format(**all_tokens).replace("\\", "/")
             if t_f != '':
@@ -966,8 +938,7 @@ class PackNukeScript:
             else:
                 _template_full = r_t
 
-            t_f_r = _stngs['top_folder_relink'].format(**all_tokens).replace(
-                "\\", "/")
+            t_f_r = _stngs['top_folder_relink'].format(**all_tokens).replace("\\", "/")
             if t_f_r != '':
                 _template_full_relink = r_t_r + '/' + t_f_r
             else:
@@ -977,19 +948,78 @@ class PackNukeScript:
                 'template': _template_full,
                 'template_relink': _template_full_relink,
                 'target': [_template_full + '/' + file_name],
+                'target_exists': False,
                 'relink': [_template_full_relink + '/' + file_name]
             }
 
-    def prepare_media_copy_list(self):
+    def execute_command(self, command):
+
+        command_as_string = ' '.join(command)
+        print("Executing command: {}".format(command_as_string))
+
+        process = subprocess.run(command_as_string,
+                                 capture_output=True,
+                                 shell=True,
+                                 check=False)
+
+        return_code = process.returncode
+        output = process.stdout.decode('utf8', 'ignore').strip('\n')
+        error = process.stderr.decode('utf8', 'ignore').strip('\n')
+        return return_code, output, error
+
+    def copy_sequence(self, source_folder, destination_folder, file_name_filter):
+
+        return_code = None
+        output = None
+        error = None
+
+        print("Copying sequence files {}/{} to {}".format(source_folder, file_name_filter, destination_folder))
+
+        if platform.system() == 'Windows':
+            return_code, output, error = self.execute_command(
+                ['robocopy', source_folder, destination_folder, file_name_filter])
+        elif platform.system() == 'Linux':
+            return_code, output, error = self.execute_command(
+                ['rsync', '-avh', '--progress', '--stats', source_folder + '/' + file_name_filter, destination_folder + '/'])
+        else:
+            for file in glob.glob(source_folder + '/' + file_name_filter):
+                shutil.copy(file, destination_folder)
+            return_code = 0
+            output = ''
+            error = ''
+        return return_code, output, error
+
+    def copy_file(self, source, target):
+
+        print("Copying file {} to {}".format(source, target))
+        shutil.copy2(source, target)
+        return 0
+
+    def copy_media(self):
+        start = timeit.timeit()
 
         for media_item in self.media_items:
             if media_item['duplicate_of'] is None:
-                for one_category, paths in media_item[
-                    'category_files'].items():
-                    for i in range(0, len(media_item['all_files_with_sizes'])):
-                        self.media_copy_list.append(
-                            [media_item['all_files_with_sizes'][i][0],
-                             paths['target'][i]])
+                source_folder = '/'.join(media_item['found_path_filter'].split('/')[:-1])
+                file_name_filter = None
+                if '?' in media_item['found_path_filter']:
+                    file_name_filter = media_item['found_path_filter'].split('/')[-1]
+                for one_category, paths in media_item['category_files'].items():
+
+                    # make sure the target folder exists
+                    destination_folder = '/'.join(paths['target'][0].split('/')[0:-1])
+                    os.makedirs(destination_folder, exist_ok=True)
+                    if file_name_filter:
+                        return_code, output, error = self.copy_sequence(source_folder, destination_folder, file_name_filter)
+                    else:
+                        # might not be file sequence, will loop all files anyway, just in case
+                        for i in range(0, len(media_item['all_files_with_sizes'])):
+                            source = media_item['all_files_with_sizes'][i][0]
+                            target = paths['target'][i]
+                            self.copy_file(source, target)
+
+        end = timeit.timeit()
+        print("Copying took {} seconds".format(end - start))
 
     def prepare_script(self):
 
@@ -1011,7 +1041,7 @@ class PackNukeScript:
         self.font_items_to_paths()
 
         # prepare copy list
-        self.prepare_media_copy_list()
+        self.copy_media()
 
         # save report (start)
 
@@ -1019,7 +1049,8 @@ class PackNukeScript:
         for one in self.media_items:
             if one['duplicate_of'] is None:
                 # pprint.pprint(one)
-                print(one['found_path'])
+                print(one['found_path_filter'])
+                print("\n")
                 print(one['category_files'])
                 print('\n\n')
 
