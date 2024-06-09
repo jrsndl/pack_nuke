@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import platform
 import timeit
+import hashlib
 
 def get_default_category():
     default_category = {
@@ -63,7 +64,7 @@ def get_nuke_pack_project_settings():
             },
             "nuke_scripts_target": {
                 "nuke_scripts_target_copy": True,
-                "nuke_scripts_target_path": "{job}/{folder[name]}/{script_name}_check.nk",
+                "nuke_scripts_target_path": "{job}/{folder[name]}/{script_name}_target.nk",
                 "nuke_scripts_target_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_source.nk",
                 "nuke_scripts_target_relative": True
             }
@@ -370,11 +371,12 @@ class PackNukeScript:
             view_files = [knob_path]
 
         # overwrite knob_path value with new value per view
+        # TODO per view file hashes
         for knob_path in view_files:
 
             # get TCL evaluated string
             knob_path_tcl = self.eval_tcl(knob_path)
-            hash_path = knob_path_tcl
+            path_with_hashes = knob_path_tcl
 
             # get parent directory
             knob_path_parent_dir = os.path.dirname(knob_path_tcl)
@@ -413,7 +415,7 @@ class PackNukeScript:
                     files = glob.glob(wildcard_path)
                     for each_file in files:
                         paths.append(each_file.replace('\\', '/'))
-                    hash_path = wildcard_path.replace('?', '#')
+                    path_with_hashes = wildcard_path.replace('?', '#')
 
                 # if hash notation is used for the sequence
                 elif '#' in filename:
@@ -434,7 +436,7 @@ class PackNukeScript:
                     files = glob.glob(wildcard_path)
                     for each_file in files:
                         paths.append(each_file.replace('\\', '/'))
-                    hash_path = wildcard_path.replace('?', '#')
+                    path_with_hashes = wildcard_path.replace('?', '#')
 
                 # if not a sequence
                 else:
@@ -447,7 +449,7 @@ class PackNukeScript:
                         paths.append(self.prepend_project_directory(knob_path_tcl))
 
         # return result
-        return paths, project_dir, hash_path
+        return paths, project_dir, path_with_hashes.replace('#', '?')
 
     def read_comp_data(self):
         """
@@ -573,20 +575,31 @@ class PackNukeScript:
 
         def get_media_item(node, knob, path, disabled, disconnected):
             # get real paths (file path list + project dir bool)
-            real_knob_paths, project_dir, hash_path = self.get_real_knob_paths(path)
+            real_knob_paths, project_dir, path_with_question_marks = self.get_real_knob_paths(path)
 
             # make new list for new paths with their per-file size included
-            all_files_with_sizes = []
+            all_files = []
 
             # get total file size
             total_size = 0
             if real_knob_paths is None:
                 return None
 
+            total_hash = hashlib.blake2b()
             for each_file in real_knob_paths:
                 size = os.path.getsize(each_file)
+                one_file = open(each_file, 'rb')
+                my_hash = None
+                if self.settings['hashes']['hashes_generate']:
+                    try:
+                        # read all file at once, memory hungry but faster
+                        my_hash = hashlib.blake2b(one_file.read()).hexdigest()
+                        #my_hash = hashlib.md5(one_file.read()).hexdigest()
+                    finally:
+                        one_file.close()
+
                 total_size += size
-                all_files_with_sizes.append([each_file, size])
+                all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
 
             # check if the path exists
             exists = False
@@ -596,12 +609,12 @@ class PackNukeScript:
             item = {
                 'node': node,
                 'knob': knob,
-                'node_class': str(node.Class()),
-                'node_name': str(node.fullName()),
+                'node_class': node.Class(),
+                'node_name': node.fullName(),
                 'exists': exists,
                 'found_path': path,
-                'found_path_filter': hash_path.replace('#', '?'),
-                'all_files_with_sizes': all_files_with_sizes,
+                'found_path_filter': path_with_question_marks,
+                'all_files': all_files,
                 'total_size': total_size,
                 'project_dir': project_dir,
                 'node_disabled': disabled,
@@ -744,26 +757,26 @@ class PackNukeScript:
                     else:
                         return None
 
-            def match_node_class(filter, node_class):
+            def match_node_class(my_filter, node_class):
                 """
                 Filter check is ignored, only matches the class name
                 """
                 if node_class is None:
                     return None
 
-                node_list = filter['search'].strip().split(' ')
+                node_list = my_filter['search'].strip().split(' ')
                 if node_list is None or len(node_list) == 0:
                     return None
 
                 if node_class in node_list:
-                    if not filter['invert']:
+                    if not my_filter['invert']:
                         # print("Match_class matched")
                         return node_class
                     else:
                         # print("Match_class not matched, 'cause of invert")
                         return None
                 else:
-                    if not filter['invert']:
+                    if not my_filter['invert']:
                         # print("Match_class not matched")
                         return None
                     else:
@@ -778,8 +791,8 @@ class PackNukeScript:
                 # should skip disabled
                 print("Media Item {} skipped: disabled".format(media_item['node_name']))
                 return False, None
-            if media_item['all_files_with_sizes'] and len(media_item['all_files_with_sizes']) > 0:
-                full_path = media_item['all_files_with_sizes'][0][0]
+            if media_item['all_files'] and len(media_item['all_files']) > 0:
+                full_path = media_item['all_files'][0]['path']
                 _dir, file_name = os.path.split(full_path)
             else:
                 print("Media Item {} skipped: no file found".format(media_item['node_name']))
@@ -856,7 +869,7 @@ class PackNukeScript:
                 for check_item in self.media_items:
                     if check_item == media_item:
                         continue
-                    if media_item['all_files_with_sizes'] == check_item['all_files_with_sizes']:
+                    if media_item['all_files'] == check_item['all_files']:
                         check_item['duplicate_of'] = media_item
 
     def find_font_duplicities(self):
@@ -884,8 +897,8 @@ class PackNukeScript:
             cats = media_item.get('categories')
             all_tokens = {**self.anatomy, **media_item['tokens']}
             all_file_names = []
-            for one_file in media_item['all_files_with_sizes']:
-                all_file_names.append(one_file[0].split('/')[-1])
+            for one_file in media_item['all_files']:
+                all_file_names.append(one_file['path'].split('/')[-1])
 
             if cats is not None:
                 for one_category in cats:
@@ -1013,13 +1026,36 @@ class PackNukeScript:
                         return_code, output, error = self.copy_sequence(source_folder, destination_folder, file_name_filter)
                     else:
                         # might not be file sequence, will loop all files anyway, just in case
-                        for i in range(0, len(media_item['all_files_with_sizes'])):
-                            source = media_item['all_files_with_sizes'][i][0]
+                        for i in range(0, len(media_item['all_files'])):
+                            source = media_item['all_files'][i]['path']
                             target = paths['target'][i]
                             self.copy_file(source, target)
 
         end = timeit.timeit()
-        print("Copying took {} seconds".format(end - start))
+        print("Coping took {} seconds".format(end - start))
+
+    def make_nuke_scripts(self):
+
+        class Default(dict):
+            def __missing__(self, key):
+                return key
+
+        nuke_script_full = nuke.root().name().replace('\\', '/')
+        nuke_script = nuke_script_full.split('/')[-1]
+        self.anatomy['script_name'] = nuke_script[:-3]
+
+        nuke_source = self.settings['nuke_scripts']['nuke_scripts_source']['nuke_scripts_source_path'].format_map(Default(self.anatomy)).replace("\\", "/")
+        shutil.copy2(nuke_script_full, nuke_source)
+        nuke_package = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_path'].format_map(Default(self.anatomy)).replace("\\", "/")
+        shutil.copy2(nuke_script_full, nuke_package)
+        nuke_target = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_path'].format_map(Default(self.anatomy)).replace("\\", "/")
+        shutil.copy2(nuke_script_full, nuke_target)
+
+        nuke_package_relative = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_relative']
+        nuke_target_relative = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_relative']
+
+
+
 
     def prepare_script(self):
 
@@ -1043,15 +1079,19 @@ class PackNukeScript:
         # prepare copy list
         self.copy_media()
 
+        # Make Nuke scripts
+        self.make_nuke_scripts()
+
         # save report (start)
 
         print("\n\nmedia items:\n")
         for one in self.media_items:
             if one['duplicate_of'] is None:
-                # pprint.pprint(one)
-                print(one['found_path_filter'])
-                print("\n")
-                print(one['category_files'])
+                pprint.pprint(one)
+                # print(one['found_path_filter'])
+                # print("\n")
+                # print(one['category_files'])
+                # print(one['all_files'])
                 print('\n\n')
 
         print("\n\nFONTS:\n")
@@ -1099,6 +1139,3 @@ if __name__ == "__main__":
             one_nuke = PackNukeScript(anatomy, job_destination, settings)
             one_nuke.prepare_script()
             one_nuke.process_script()
-
-
-
