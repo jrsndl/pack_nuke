@@ -1,4 +1,3 @@
-# import necessary
 import nuke
 import os
 import glob
@@ -10,7 +9,13 @@ import platform
 import timeit
 import hashlib
 
-def get_default_category():
+
+def get_default_category() -> dict:
+    """Get the default category if not specified by settings
+
+    Returns:
+         dict: Default category
+    """
     default_category = {
         "default_category": {
             "path": {
@@ -38,10 +43,13 @@ def get_default_category():
     return default_category
 
 
-def get_nuke_pack_project_settings():
+def get_nuke_pack_project_settings() -> dict:
+    """Get the project settings
+
+    Returns:
+         dict: all nuke pack project settings
     """
-    This will return settings dict
-    """
+
     # for testing only
     # TODO get project settings
 
@@ -142,7 +150,12 @@ def get_nuke_pack_project_settings():
     return settings
 
 
-def get_anatomy():
+def get_anatomy() -> dict:
+    """Get the folder anatomy
+
+    Returns:
+         dict: project anatomy of one folder
+    """
     # for testing only
     # TODO get anatomy
 
@@ -169,11 +182,11 @@ def get_anatomy():
         "task[short]": "comp",
         "app": "nuke",
         "d": "30",
-        "dd": "30",
+        "dd": "26",
         "ddd": "Thu",
         "dddd": "Thursday",
         "m": "5",
-        "mm": "05",
+        "mm": "07",
         "mmm": "May",
         "mmmm": "May",
         "yy": "24",
@@ -585,7 +598,7 @@ class PackNukeScript:
             if real_knob_paths is None:
                 return None
 
-            total_hash = hashlib.blake2b()
+            all_hashes = ''
             for each_file in real_knob_paths:
                 size = os.path.getsize(each_file)
                 one_file = open(each_file, 'rb')
@@ -594,12 +607,14 @@ class PackNukeScript:
                     try:
                         # read all file at once, memory hungry but faster
                         my_hash = hashlib.blake2b(one_file.read()).hexdigest()
+                        all_hashes += my_hash
                         #my_hash = hashlib.md5(one_file.read()).hexdigest()
                     finally:
                         one_file.close()
 
                 total_size += size
                 all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
+            hash_for_all = hashlib.blake2b(all_hashes.encode()).hexdigest()
 
             # check if the path exists
             exists = False
@@ -615,6 +630,7 @@ class PackNukeScript:
                 'found_path': path,
                 'found_path_filter': path_with_question_marks,
                 'all_files': all_files,
+                'hash_for_all': hash_for_all,
                 'total_size': total_size,
                 'project_dir': project_dir,
                 'node_disabled': disabled,
@@ -1125,6 +1141,8 @@ class PackNukeScript:
 
 
 if __name__ == "__main__":
+
+    #nuke.scriptOpen("Z:/T027_cgTests_Sept23/shots/sq02/sq02sh10/work/comp/nuke/sq02sh10_comp_v059.nk")
 
     # get user info
     # anatomies is list of anatomy dicts, that contain workfile path
