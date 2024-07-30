@@ -1,4 +1,5 @@
 import nuke
+import datetime
 import os
 import glob
 import re
@@ -53,99 +54,112 @@ def get_nuke_pack_project_settings() -> dict:
     # for testing only
     # TODO get project settings
 
-    settings = {"toVendor1": {
-        "job": {
-            "job_name_default": "PackNuke_Dazzle2Vendor1_{yyyy}-{mm}-{dd}_v000",
-            "job_name_check": "PackNuke_Dazzle2Vendor1_20\d\d-\d\d-\d\d_v\d\d\d",
-            "job_root": "{root[work]}/{project[name]}/out/packNuke/Dazzle2Vendor1"
-        },
-        "nuke_scripts": {
-            "nuke_scripts_source": {
-                "nuke_scripts_source_copy": True,
-                "nuke_scripts_source_path": "{job}/{folder[name]}/{script_name}_source.nk"
+    settings = \
+        {"toVendor1": {
+            "job": {
+                "job_name_default": "PackNuke_{place_source}2{place_target}_{timestamp}",
+                "job_name_check": "^PackNuke_(.+)2(.+)_(\d{6}_\d{4})_([-]?\d{4})[_]?(?:.*)$",
+                "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}"
             },
-            "nuke_scripts_package": {
-                "nuke_scripts_package_copy": True,
-                "nuke_scripts_package_path": "{job}/{folder[name]}/{script_name}_check.nk",
-                "nuke_scripts_package_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_source.nk",
-                "nuke_scripts_package_relative": True
+            "nuke_scripts": {
+                "nuke_scripts_source": {
+                    "nuke_scripts_source_copy": True,
+                    "nuke_scripts_source_path": "{job}/{folder[name]}/{script_name}_source.nk"
+                },
+                "nuke_scripts_package": {
+                    "nuke_scripts_package_copy": True,
+                    "nuke_scripts_package_path": "{job}/{folder[name]}/{script_name}_check.nk",
+                    "nuke_scripts_package_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_check.nk",
+                    "nuke_scripts_package_relative": True
+                },
+                "nuke_scripts_target": {
+                    "nuke_scripts_target_copy": True,
+                    "nuke_scripts_target_path": "{job}/{folder[name]}/{script_name}_target.nk",
+                    "nuke_scripts_target_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_target.nk",
+                    "nuke_scripts_target_relative": True
+                }
             },
-            "nuke_scripts_target": {
-                "nuke_scripts_target_copy": True,
-                "nuke_scripts_target_path": "{job}/{folder[name]}/{script_name}_target.nk",
-                "nuke_scripts_target_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_source.nk",
-                "nuke_scripts_target_relative": True
-            }
-        },
-        "hashes": {
-            "hashes_generate": True
-        },
-        "categories": {
-            "test_category": {
-                "path": {
-                    "root_template": "{job}/{folder[name]}/{category}",
-                    "root_template_relink": "{job}/{folder[name]}/{category}",
-                    "top_folder": "{node}",
-                    "top_folder_relink": "{node}"
+            "hashes": {
+                "hashes_generate": True
+            },
+            "places": {
+                "studio": {
+                    "long_name": "Great Studio",
+                    "use_nuke_path": False,
+                    "path_regex": "^.*\/(DP\d4_.*)\/.*$"
                 },
-                "filter_options": {
-                    "skip_disconnected": False,
-                    "skip_disabled": True,
-                    "combine_filters": "OR"
-                },
-                "filters": [
-                    {
-                        "source": "File Name",
-                        "search": ".*\.(\w{2,4})$",
-                        "check": ["exr", "jpg", "jpeg", "mov"],
-                        "token_name": "extension",
-                        "invert": False
+                "vendor1": {
+                    "long_name": "Amazing Vendor",
+                    "use_nuke_path": False,
+                    "path_regex": "^.*(projects).*$"
+                }
+            },
+            "categories": {
+                "test_category": {
+                    "path": {
+                        "root_template": "{job}/{folder[name]}/{category}",
+                        "root_template_relink": "{job}/{folder[name]}/{category}",
+                        "top_folder": "{clean_name}_{node}",
+                        "top_folder_relink": "{clean_name}_{node}"
                     },
-                    {
-                        "source": "Full Path",
-                        "search": ".*\/(v\d\d\d)\/.*",
-                        "check": [],
-                        "token_name": "version_from_path",
-                        "invert": False
+                    "filter_options": {
+                        "skip_disconnected": False,
+                        "skip_disabled": True,
+                        "combine_filters": "OR"
                     },
-                    {
-                        "source": "Node Class",
-                        "search": "Read Write",
-                        "check": [],
-                        "token_name": "class_read_write",
-                        "invert": False
-                    }
-                ]
+                    "filters": [
+                        {
+                            "source": "File Name",
+                            "search": ".*\.(\w{2,4})$",
+                            "check": ["exr", "jpg", "jpeg", "mov"],
+                            "token_name": "extension",
+                            "invert": False
+                        },
+                        {
+                            "source": "Full Path",
+                            "search": ".*\/(v\d\d\d)\/.*",
+                            "check": [],
+                            "token_name": "version_from_path",
+                            "invert": False
+                        },
+                        {
+                            "source": "Node Class",
+                            "search": "Read Write",
+                            "check": [],
+                            "token_name": "class_read_write",
+                            "invert": False
+                        }
+                    ]
+                }
+            },
+            "fonts": {
+                "enabled": True,
+                "root_template": "{job}/{folder[name]}/fonts",
+                "root_template_relink": "/vendor1_relink_root/{folder[name]}/fonts",
+                "top_folder": "",
+                "top_folder_relink": "",
+                "skip_disconnected": True,
+                "skip_disabled": True
+            },
+            "gizmos": {
+                "enabled": True,
+                "to_groups": True,
+                "root_template": "{job}/{folder[name]}/gizmos",
+                "root_template_relink": "/vendor1_relink_root/{folder[name]}/gizmos",
+                "top_folder": "",
+                "top_folder_relink": "",
+                "skip_disconnected": True,
+                "skip_disabled": True
+            },
+            "ocio": {
+                "enabled": True,
+                "root_template": "{job}/{folder[name]}/ocio",
+                "root_template_relink": "/vendor1_relink_root/{folder[name]}/ocio",
+                "top_folder": "",
+                "top_folder_relink": "",
+                "subfolders": True
             }
-        },
-        "fonts": {
-            "enabled": True,
-            "root_template": "{job}/{folder[name]}/fonts",
-            "root_template_relink": "/vendor1_relink_root/{folder[name]}/fonts",
-            "top_folder": "",
-            "top_folder_relink": "",
-            "skip_disconnected": True,
-            "skip_disabled": True
-        },
-        "gizmos": {
-            "enabled": True,
-            "to_groups": True,
-            "root_template": "{job}/{folder[name]}/gizmos",
-            "root_template_relink": "/vendor1_relink_root/{folder[name]}/gizmos",
-            "top_folder": "",
-            "top_folder_relink": "",
-            "skip_disconnected": True,
-            "skip_disabled": True
-        },
-        "ocio": {
-            "enabled": True,
-            "root_template": "{job}/{folder[name]}/ocio",
-            "root_template_relink": "/vendor1_relink_root/{folder[name]}/ocio",
-            "top_folder": "",
-            "top_folder_relink": "",
-            "subfolders": True
         }
-    }
     }
     return settings
 
@@ -221,13 +235,22 @@ def action_dialog():
         def __missing__(self, key):
             return key
 
+    def my_time():
+        """
+        Used for timestamping packages
+        Stores UTC time, and adds UTC offset for user comfort
+        Offset assumes plus sign, unless - present
+        :return:
+        """
+        # get utc time YYMMDD-HHMM_
+        utc = datetime.datetime.now(datetime.timezone.utc).strftime('%y%m%d_%H%M_')
+        # get utc to local time offset, this is just for user
+        offset = datetime.datetime.now(datetime.timezone.utc).astimezone().strftime('%z').replace('+', '')
+        return utc + offset
+
+
     # get project settings
     settings = get_nuke_pack_project_settings()
-
-    # this is project anatomy
-    anatomy = get_anatomy()
-
-    # get first pack profile
     profile_name_first = list(settings)[0]
 
     profile_names = " ".join(list(settings))
@@ -235,15 +258,39 @@ def action_dialog():
     job_default_check = settings[profile_name_first]["job"]["job_name_check"]
     job_default_path = settings[profile_name_first]["job"]["job_root"]
 
+    # places
+    job_places = list(settings[profile_name_first]["places"].keys())
+    if job_places is None or len(job_places) < 2:
+        print("Bad config, need two or more places")
+    # current place can be defined by environment
+    _place_target = job_places[1]
+    if os.environ.get('PACK_NUKE_PLACE') is not None:
+        _place_source = os.environ.get('PACK_NUKE_PLACE')
+        if _place_source == job_places[1]:
+            _place_target = job_places[0]
+    else:
+        _place_source = job_places[0]
+
+    # Get project anatomy, and extend it with more tokens
+    _timestamp = my_time()
+    anatomy = get_anatomy()
+    more_tokens = {
+        "place_source": _place_source,
+        "place_target": _place_target,
+        "timestamp": _timestamp
+    }
+    anatomy.update(more_tokens)
+
+
     # show dialog
     # TODO
 
     # fake user input
     user_job_folder = job_default_folder.format_map(Default(anatomy)).replace("\\", "/")
     user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\", "/")
-    # user_job_folder = job_default_folder.format(**anatomy).replace("\\", "/")
-    # user_job_path = job_default_path.format(**anatomy).replace("\\", "/")
     user_job_profile = profile_name_first
+    place_source = _place_source
+    place_target = _place_target
 
     # validate user input
     if not re.match(job_default_check, user_job_folder):
@@ -254,10 +301,16 @@ def action_dialog():
     # now get a list of "workfile anatomies"
     # will fake it for now
     anatomy = get_anatomy()
-    anatomy['job'] = job_destination  # add job name
-    anatomy['job_path'] = user_job_path
-    anatomy['job_folder'] = user_job_folder
-    anatomies = [anatomy]  # fake it for one Nuke script
+    more_tokens = {
+        "place_source": place_source,
+        "place_target": place_target,
+        "timestamp": _timestamp,
+        'job': job_destination,  # add job name
+        'job_path': user_job_path,
+        'job_folder': user_job_folder
+    }
+    anatomy.update(more_tokens)
+    anatomies = [anatomy]  # fake it for one Nuke script, for testing
 
     return anatomies, job_destination, settings.get(user_job_profile)
 
@@ -276,19 +329,30 @@ class PackNukeScript:
         self.categories = {}
         self.media_copy_list = []
 
-    def printf_to_hashes(self, path):
+    def file_sequence_to_glob(self, path):
+        """
+        Helper function to convert a full path with printf or hash file sequence notation to glob filter
+        foo\bar%04d.exr -> foo/bar.????.exr
+        foo\bar###.exr -> foo/bar.???.exr
+        foo/bar -> foo/bar
+        """
 
         path = path.replace('\\', '/')
+        path_only = path.split('/')[:-1]
         name = path.split('/')[-1]
-
-        regex = re.compile('%..d')
-        printfCount = -1
-        try:
-            regexFile = regex.findall(name)[0]
-            printfCount = int(regexFile[1:-1])
-        except Exception as e:
-            # no printf used
-            pass
+        if '#' in name:
+            name.replace('#', '?')
+            path = path_only + '/' + name
+        elif '%' in name:
+            result = re.search(r'(.*)(%\d+d)(.*)', name)
+            printf_count = -1
+            try:
+                wildcards = '#' * int(result.group(2))
+                path = path_only + '/' + result.group(1) + wildcards + result.group(3)
+            except Exception as e:
+                # no printf used
+                pass
+        return path
 
     def bytes_to_string(self, size_bytes):
         size_bytes = float(size_bytes)
@@ -494,11 +558,19 @@ class PackNukeScript:
         def is_node_gizmo(node):
             # check if a node is a gizmo, and if so, return the full name
 
-            gizmo = type(node) == nuke.Gizmo
-            if gizmo:
+            if type(node) == nuke.Gizmo:
                 return node.Class() if node.Class().endswith('.gizmo') else node.Class() + '.gizmo'
             else:
                 return ''
+
+        def get_knob_value(node, knob_name):
+            """Return the value of a knob or return None if it is missing"""
+            value = None
+            if not isinstance(node.knob(knob_name), type(None)):
+                value = node.knob(knob_name).value()
+                if value is None:
+                    value = node.knob(knob_name).getValue()
+            return value
 
         def get_loaded_plugins():
 
@@ -515,6 +587,17 @@ class PackNukeScript:
                         custom_plugins.append(plugin)
             return custom_plugins
 
+        def get_file_hash(path):
+            my_hash = None
+            if self.settings['hashes']['hashes_generate']:
+                one_file = open(path, 'rb')
+                try:
+                    # read all file at once, memory hungry but faster
+                    my_hash = hashlib.blake2b(one_file.read()).hexdigest()
+                finally:
+                    one_file.close()
+            return my_hash
+
         def store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected):
 
             if gizmo_name != '':
@@ -524,36 +607,32 @@ class PackNukeScript:
                 for each_plugin_path in nuke.pluginPath():
                     gizmo_path = os.path.join(each_plugin_path, gizmo_name).replace('\\', '/')
                     if os.path.isfile(gizmo_path):
-                        gizmo_path_found = False
+                        gizmo_path_found = True
                         break
                 if gizmo_path_found:
                     if os.path.isfile(gizmo_path):
                         gizmo_item = {
                             'gizmo_name': gizmo_name,
-                            'gizmo_path': gizmo_path,
-                            'nodes': [each_node],
+                            'path': gizmo_path,
+                            'node_name': each_node.fullName(),
+                            'node_class': each_node.Class(),
                             'node_disabled': node_disabled,
                             'node_disconnected': node_disconnected,
-                            'size': os.path.getsize(gizmo_path)
+                            'node': each_node,
+                            'size': os.path.getsize(gizmo_path),
+                            'file_hash': get_file_hash(gizmo_path),
+                            'duplicate_of': None,
                         }
-
-                        i = 0
-                        already_found = False
-                        for g in gizmo_items:
-                            if g['gizmo_name'] == gizmo_name:
-                                if g['node_disabled'] == node_disabled:
-                                    if g['node_disconnected'] == node_disconnected:
-                                        already_found = True
-                                        gizmo_items[i]['nodes'].append(each_node)
-                            i += 1
-                        if not already_found:
-                            gizmo_items.append(gizmo_item)
+                        gizmo_items.append(gizmo_item)
 
             return gizmo_items
 
         def get_font_info(font_items):
             """
             fill missing info from getFonts
+            if font path is known, get family, style, index
+            if font path is not known, get path
+            get file size and hash
             """
 
             # see https://learn.foundry.com/nuke/content/comp_environment/effects/fonts_properties.html
@@ -584,6 +663,12 @@ class PackNukeScript:
                                 found_font['path'] = font[2]
                                 found_font['font_index'] = font[3]
                                 break
+
+                # now path is there, get size and hash
+                for found_font in font_items:
+                    found_font['size'] = os.path.getsize(found_font['path'])
+                    found_font['file_hash'] = get_file_hash(found_font['path'])
+
             return font_items
 
         def get_media_item(node, knob, path, disabled, disconnected):
@@ -601,32 +686,44 @@ class PackNukeScript:
             all_hashes = ''
             for each_file in real_knob_paths:
                 size = os.path.getsize(each_file)
-                one_file = open(each_file, 'rb')
-                my_hash = None
-                if self.settings['hashes']['hashes_generate']:
-                    try:
-                        # read all file at once, memory hungry but faster
-                        my_hash = hashlib.blake2b(one_file.read()).hexdigest()
-                        all_hashes += my_hash
-                        #my_hash = hashlib.md5(one_file.read()).hexdigest()
-                    finally:
-                        one_file.close()
-
                 total_size += size
+                my_hash = get_file_hash(each_file)
+                all_hashes += my_hash
                 all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
             hash_for_all = hashlib.blake2b(all_hashes.encode()).hexdigest()
 
-            # check if the path exists
-            exists = False
-            if len(real_knob_paths) > 0:
-                exists = True
+            # transform type in Nuke 15+, being colorspace/display
+            # the display value needs ocioDisplay, ocioView
+            _type = get_knob_value(node, 'transformType')
+            if _type is None:
+                _type = 'colorspace'
+            _cs = get_knob_value(node, 'colorspace')
+            # for default colorspace, do a wild guess by nuke defaults and file extension
+            if _cs is not None and _cs == 'default':
+                file_name = path_with_question_marks.split('/')[-1]
+                extension = file_name.split('.')[-1]
+                _cs = nuke.root()['floatLut'].value()
+                if extension != 'exr':
+                    _cs = nuke.root()['int8Lut'].value()
+
+            _read_range = '-'
+            if node.Class() == 'Read':
+                _first = get_knob_value(node, 'first')
+                _last = get_knob_value(node, 'last')
+                if _first is not None and _last is not None:
+                    _read_range = f'{int(str(_first).strip())}-{int(str(_last).strip())}'
 
             item = {
                 'node': node,
+                'color_space': _cs,
+                'color_transformType': _type,
+                'color_display': get_knob_value(node, 'ocioDisplay'),
+                'color_view': get_knob_value(node, 'ocioView'),
+                'color_raw': get_knob_value(node, 'raw'),
+                'read_range': _read_range,
                 'knob': knob,
                 'node_class': node.Class(),
                 'node_name': node.fullName(),
-                'exists': exists,
                 'found_path': path,
                 'found_path_filter': path_with_question_marks,
                 'all_files': all_files,
@@ -667,6 +764,7 @@ class PackNukeScript:
             # check if node is a gizmo
             gizmo_name = is_node_gizmo(each_node)
             if gizmo_name != '':
+                print(f"Trying to store gizmo {str(each_node.fullName())} with name {gizmo_name}")
                 gizmo_items = store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected)
 
             # Check all knobs in Node
@@ -690,8 +788,8 @@ class PackNukeScript:
                                 'knob_type': 'File_Knob',
                                 'node_class': str(each_node.Class()),
                                 'node_name': str(each_node.fullName()),
-                                'disabled': node_disabled,
-                                'disconnected': node_disconnected,
+                                'node_disabled': node_disabled,
+                                'node_disconnected': node_disconnected,
                                 'path': found_path.replace('\\', '/'),
                                 'duplicate_of': None,
                                 'font_files': {}
@@ -719,8 +817,8 @@ class PackNukeScript:
                             'knob_type': 'FreeType_Knob',
                             'node_class': str(each_node.Class()),
                             'node_name': str(each_node.fullName()),
-                            'disabled': node_disabled,
-                            'disconnected': node_disconnected,
+                            'node_disabled': node_disabled,
+                            'node_disconnected': node_disconnected,
                             'path': None,
                             'duplicate_of': None,
                             'font_files': {}
@@ -735,6 +833,103 @@ class PackNukeScript:
         self.font_items = get_font_info(font_items)
         self.gizmo_items = gizmo_items
         self.loaded_plugins = get_loaded_plugins()
+
+    def make_report(self):
+
+        # save report (start)
+        report = []
+        for one in self.media_items:
+            if one['duplicate_of'] is None:
+                number_of_files = len(one['all_files'])
+                if number_of_files == 1:
+                    hash = one['all_files'][0]['hash']
+                else:
+                    hash = ''
+                file_name = one['found_path_filter'].split('/')[-1]
+                extension = file_name.split('.')[-1]
+                if one['color_space'] is not None and one['color_space'] is None:
+                    color_info = one['color_space']
+                elif one['color_transformType'] is not None and one['color_transformType'] == 'display':
+                    color_info = f"{one['color_display']}:{one['color_view']}"
+                else:
+                    color_info = ''
+                if one['color_raw'] is not None and one['color_raw']:
+                    color_info += ':raw'
+
+                item = {
+                    'type': 'media',
+                    'categories': ', '.join(one['categories']),
+                    'info': color_info,
+                    'node_class': one['node_class'],
+                    'node_name': one['node_name'],
+                    'file_name': file_name,
+                    'extension': extension,
+                    'size': one['total_size'],
+                    'node_disabled': one['node_disabled'],
+                    'node_disconnected': one['node_disconnected'],
+                    'path': one['found_path'],
+                    'file_hash': hash,
+                    'file_number': number_of_files,
+                    'hash_for_all': one['hash_for_all'],
+                    'place_source': self.anatomy['place_source'],
+                    'place_target': self.anatomy['place_target'],
+                    'timestamp': self.anatomy['timestamp']
+                }
+                report.append(item)
+
+        for one in self.font_items:
+            if one['duplicate_of'] is None:
+                file_name = one['path'].split('/')[-1]
+                extension = file_name.split('.')[-1]
+                font_info = f"{one['font_family']}, {one['font_style']}, {one['font_index']}"
+                item = {
+                    'type': 'fonts',
+                    'info': font_info,
+                    'node_class': one['node_class'],
+                    'node_name': one['node_name'],
+                    'file_name': file_name,
+                    'extension': extension,
+                    'size': one['size'],
+                    'categories': 'font',
+                    'node_disabled': one['node_disabled'],
+                    'node_disconnected': one['node_disconnected'],
+                    'path': one['path'],
+                    'file_hash': one['file_hash'],
+                    'file_number': 1,
+                    'hash_for_all': '',
+                    'place_source': self.anatomy['place_source'],
+                    'place_target': self.anatomy['place_target'],
+                    'timestamp': self.anatomy['timestamp']
+                }
+                report.append(item)
+
+        for one in self.gizmo_items:
+            if one['duplicate_of'] is None:
+                file_name = one['path'].split('/')[-1]
+                extension = file_name.split('.')[-1]
+                item = {
+                    'type': 'gizmos',
+                    'info': '',
+                    'node_class': one['node_class'],
+                    'node_name': one['node_name'],
+                    'file_name': file_name,
+                    'extension': extension,
+                    'size': one['size'],
+                    'categories': 'gizmo',
+                    'node_disabled': one['node_disabled'],
+                    'node_disconnected': one['node_disconnected'],
+                    'path': one['path'],
+                    'file_hash': one['file_hash'],
+                    'file_number': 1,
+                    'hash_for_all': '',
+                    'place_source': self.anatomy['place_source'],
+                    'place_target': self.anatomy['place_target'],
+                    'timestamp': self.anatomy['timestamp']
+                }
+                report.append(item)
+
+        self.report = report
+
 
     def media_items_to_categories(self):
 
@@ -801,17 +996,17 @@ class PackNukeScript:
 
             if filter_options['skip_disconnected'] and media_item['node_disconnected']:
                 # should skip disconnected
-                print("Media Item {} skipped: disconnected".format(media_item['node_name']))
+                # print("Media Item {} skipped: disconnected".format(media_item['node_name']))
                 return False, None
             if filter_options['skip_disabled'] and media_item['node_disabled']:
                 # should skip disabled
-                print("Media Item {} skipped: disabled".format(media_item['node_name']))
+                # print("Media Item {} skipped: disabled".format(media_item['node_name']))
                 return False, None
             if media_item['all_files'] and len(media_item['all_files']) > 0:
                 full_path = media_item['all_files'][0]['path']
                 _dir, file_name = os.path.split(full_path)
             else:
-                print("Media Item {} skipped: no file found".format(media_item['node_name']))
+                # print("Media Item {} skipped: no file found".format(media_item['node_name']))
                 # no file, no match
                 return False, None
 
@@ -829,7 +1024,7 @@ class PackNukeScript:
                 if match is not None:
                     tokens[one_filter['token_name']] = match
                     matches += 1
-            print("Tokens {}, matches {}".format(tokens, matches))
+            # print("Tokens {}, matches {}".format(tokens, matches))
 
             if (filter_options['combine_filters'].lower() == 'and' and matches == len(filter_list)) or (
                     filter_options['combine_filters'].lower() == 'or' and matches > 0):
@@ -859,7 +1054,7 @@ class PackNukeScript:
                 filter_list = default_category['default_category']['filters']
 
             for media_item in self.media_items:
-                print("media_items_to_categories: checking {} {}".format(media_item['node_name'], category_name))
+                # print("media_items_to_categories: checking {} {}".format(media_item['node_name'], category_name))
                 matching, more_tokens = is_media_item_matching(media_item, paths, filter_options, filter_list)
                 if matching:
                     # add category name to media item
@@ -898,6 +1093,16 @@ class PackNukeScript:
                     if font_item['path'] == check_item['path']:
                         check_item['duplicate_of'] = font_item
 
+    def find_gizmo_duplicities(self):
+
+        for gizmo_item in self.gizmo_items:
+            if gizmo_item.get('duplicate_of') is None:
+                for check_item in self.gizmo_items:
+                    if check_item == gizmo_item:
+                        continue
+                    if gizmo_item['path'] == check_item['path']:
+                        check_item['duplicate_of'] = gizmo_item
+
     def media_items_to_paths(self):
         """
         Fills media_item['category_files'][category_name]
@@ -912,6 +1117,13 @@ class PackNukeScript:
         for media_item in self.media_items:
             cats = media_item.get('categories')
             all_tokens = {**self.anatomy, **media_item['tokens']}
+
+            # get filename but skip file sequence counter, use glob filter
+            _ = os.path.basename(media_item['found_path_filter']).split('?')
+            clean_name = _[0].rstrip('._-')
+            if len(_) > 1:
+                 clean_name += _[-1]
+
             all_file_names = []
             for one_file in media_item['all_files']:
                 all_file_names.append(one_file['path'].split('/')[-1])
@@ -921,6 +1133,8 @@ class PackNukeScript:
                     all_tokens['category'] = one_category
                     all_tokens['node'] = media_item['node_name']
                     all_tokens['node_class'] = media_item['node_class']
+                    all_tokens['clean_name'] = clean_name
+
                     cat_set = self.settings['categories'][one_category]
                     r_t = cat_set['path']['root_template'].format(**all_tokens).replace("\\", "/")
                     r_t_r = cat_set['path']['root_template_relink'].format(**all_tokens).replace("\\", "/")
@@ -952,10 +1166,13 @@ class PackNukeScript:
 
         _stngs = self.settings['fonts']
         for font_item in self.font_items:
-            tokens = {'node': font_item['node_name'], 'class': font_item['node_class'],
-                      'font': font_item['font_family']}
+            tokens = {
+                'node': font_item['node_name'],
+                'class': font_item['node_class'],
+                'font': font_item['font_family'],
+                'clean_name': os.path.basename(font_item['path'])
+            }
             all_tokens = {**self.anatomy, **tokens}
-            all_file_names = []
             file_name = font_item['path'].split('/')[-1]
 
             r_t = _stngs['root_template'].format(**all_tokens).replace("\\", "/")
@@ -976,15 +1193,55 @@ class PackNukeScript:
             font_item['font_files'] = {
                 'template': _template_full,
                 'template_relink': _template_full_relink,
-                'target': [_template_full + '/' + file_name],
+                'target': _template_full + '/' + file_name,
                 'target_exists': False,
-                'relink': [_template_full_relink + '/' + file_name]
+                'relink': _template_full_relink + '/' + file_name
+            }
+
+    def gizmo_items_to_paths(self):
+        """
+        Fills gizmo_item['gizmo_files']
+        template and template_relink are paths with tokens filled
+        target and relink are list of paths for every file
+        """
+
+        _stngs = self.settings['gizmos']
+        for item in self.gizmo_items:
+            tokens = {
+                'node': item['node_name'],
+                'class': item['node_class'],
+                'clean_name': os.path.basename(item['path'])
+            }
+            all_tokens = {**self.anatomy, **tokens}
+            file_name = item['path'].split('/')[-1]
+
+            r_t = _stngs['root_template'].format(**all_tokens).replace("\\", "/")
+            r_t_r = _stngs['root_template_relink'].format(**all_tokens).replace("\\", "/")
+
+            t_f = _stngs['top_folder'].format(**all_tokens).replace("\\", "/")
+            if t_f != '':
+                _template_full = r_t + '/' + t_f
+            else:
+                _template_full = r_t
+
+            t_f_r = _stngs['top_folder_relink'].format(**all_tokens).replace("\\", "/")
+            if t_f_r != '':
+                _template_full_relink = r_t_r + '/' + t_f_r
+            else:
+                _template_full_relink = r_t_r
+
+            item['gizmo_files'] = {
+                'template': _template_full,
+                'template_relink': _template_full_relink,
+                'target': _template_full + '/' + file_name,
+                'target_exists': False,
+                'relink': _template_full_relink + '/' + file_name
             }
 
     def execute_command(self, command):
 
         command_as_string = ' '.join(command)
-        print("Executing command: {}".format(command_as_string))
+        # print("Executing command: {}".format(command_as_string))
 
         process = subprocess.run(command_as_string,
                                  capture_output=True,
@@ -1002,14 +1259,15 @@ class PackNukeScript:
         output = None
         error = None
 
-        print("Copying sequence files {}/{} to {}".format(source_folder, file_name_filter, destination_folder))
+        # print("Copying sequence files {}/{} to {}".format(source_folder, file_name_filter, destination_folder))
 
         if platform.system() == 'Windows':
             return_code, output, error = self.execute_command(
                 ['robocopy', source_folder, destination_folder, file_name_filter])
         elif platform.system() == 'Linux':
             return_code, output, error = self.execute_command(
-                ['rsync', '-avh', '--progress', '--stats', source_folder + '/' + file_name_filter, destination_folder + '/'])
+                ['rsync', '-avh', '--progress', '--stats', source_folder + '/' + file_name_filter,
+                 destination_folder + '/'])
         else:
             for file in glob.glob(source_folder + '/' + file_name_filter):
                 shutil.copy(file, destination_folder)
@@ -1020,7 +1278,7 @@ class PackNukeScript:
 
     def copy_file(self, source, target):
 
-        print("Copying file {} to {}".format(source, target))
+        # print("Copying file {} to {}".format(source, target))
         shutil.copy2(source, target)
         return 0
 
@@ -1034,12 +1292,12 @@ class PackNukeScript:
                 if '?' in media_item['found_path_filter']:
                     file_name_filter = media_item['found_path_filter'].split('/')[-1]
                 for one_category, paths in media_item['category_files'].items():
-
                     # make sure the target folder exists
                     destination_folder = '/'.join(paths['target'][0].split('/')[0:-1])
                     os.makedirs(destination_folder, exist_ok=True)
                     if file_name_filter:
-                        return_code, output, error = self.copy_sequence(source_folder, destination_folder, file_name_filter)
+                        return_code, output, error = self.copy_sequence(source_folder, destination_folder,
+                                                                        file_name_filter)
                     else:
                         # might not be file sequence, will loop all files anyway, just in case
                         for i in range(0, len(media_item['all_files'])):
@@ -1048,7 +1306,66 @@ class PackNukeScript:
                             self.copy_file(source, target)
 
         end = timeit.timeit()
-        print("Coping took {} seconds".format(end - start))
+        print("Coping media took {} seconds".format(int(end - start)))
+
+    def copy_fonts(self):
+        start = timeit.timeit()
+
+        for item in self.font_items:
+            if item['duplicate_of'] is None:
+                os.makedirs(os.path.dirname(item['font_files']['target']), exist_ok=True)
+                self.copy_file(item['path'], item['font_files']['target'])
+
+        end = timeit.timeit()
+        print("Coping fonts took {} seconds".format(int(end - start)))
+
+    def copy_gizmos(self):
+        start = timeit.timeit()
+
+        for item in self.gizmo_items:
+            if item['duplicate_of'] is None:
+                os.makedirs(os.path.dirname(item['gizmo_files']['target']), exist_ok=True)
+                self.copy_file(item['path'], item['gizmo_files']['target'])
+
+        end = timeit.timeit()
+        print("Coping gizmos took {} seconds".format(int(end - start)))
+
+    def gizmos_to_groups(self):
+
+        def deselect_all():
+            # deselect all nodes.
+            for i in nuke.allNodes():
+                i.knob('selected').setValue(False)
+
+        for one in self.gizmo_items:
+            gizmo = one['node']
+
+            inputs = []
+            for x in range(0, gizmo.maximumInputs()):
+                if gizmo.input(x):
+                    # print 'input: %s' % (gizmo.input(x).knob('name').value())
+                    inputs.append(gizmo.input(x))
+                else:
+                    inputs.append(False)
+            orig_name = gizmo.knob('name').value()
+            orig_pos_x = gizmo.xpos()
+            orig_pos_y = gizmo.ypos()
+            deselect_all()
+            # select knob, then run gizmo.makeGroup()
+            gizmo.knob('selected').setValue(True)
+            new_group = gizmo.makeGroup()
+            deselect_all()
+            # delete original
+            nuke.delete(gizmo)
+            new_group.knob('name').setValue(orig_name)
+            new_group['xpos'].setValue(orig_pos_x)
+            new_group['ypos'].setValue(orig_pos_y)
+            # disconnect old inputs, reconnect inputs
+            for x in range(0, new_group.maximumInputs()):
+                new_group.setInput(x, None)
+                if inputs[x]:
+                    new_group.connectInput(x, inputs[x])
+                # print 'connecting output: %s to input: %s' % (inputs[x].knob('name').value(), new_group.input(x).name())
 
     def make_nuke_scripts(self):
 
@@ -1060,30 +1377,41 @@ class PackNukeScript:
         nuke_script = nuke_script_full.split('/')[-1]
         self.anatomy['script_name'] = nuke_script[:-3]
 
-        nuke_source = self.settings['nuke_scripts']['nuke_scripts_source']['nuke_scripts_source_path'].format_map(Default(self.anatomy)).replace("\\", "/")
+        nuke_source = self.settings['nuke_scripts']['nuke_scripts_source']['nuke_scripts_source_path'].format_map(
+            Default(self.anatomy)).replace("\\", "/")
+        os.makedirs(os.path.dirname(nuke_source), exist_ok=True)
         shutil.copy2(nuke_script_full, nuke_source)
-        nuke_package = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_path'].format_map(Default(self.anatomy)).replace("\\", "/")
+
+        nuke_package = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_path'].format_map(
+            Default(self.anatomy)).replace("\\", "/")
+        os.makedirs(os.path.dirname(nuke_package), exist_ok=True)
         shutil.copy2(nuke_script_full, nuke_package)
-        nuke_target = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_path'].format_map(Default(self.anatomy)).replace("\\", "/")
+
+        nuke_target = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_path'].format_map(
+            Default(self.anatomy)).replace("\\", "/")
+        os.makedirs(os.path.dirname(nuke_target), exist_ok=True)
         shutil.copy2(nuke_script_full, nuke_target)
 
         nuke_package_relative = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_relative']
         nuke_target_relative = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_relative']
 
+        """
+        nuke.scriptOpen(nuke_package)
+        for item in self.media_items:
+            node = nuke.toNode(item['node_name'])
+            print(item['node_name'])
+        """
 
 
 
     def prepare_script(self):
-
-        # script info
-        nuke_script = nuke.root().name()
-        nuke_script_size = os.path.getsize(nuke_script)
 
         self.read_comp_data()
 
         # find duplicities
         self.find_media_duplicities()
         self.find_font_duplicities()
+        self.find_gizmo_duplicities()
 
         # filter categories
         self.media_items_to_categories()
@@ -1091,47 +1419,35 @@ class PackNukeScript:
         # generate target paths and relink paths
         self.media_items_to_paths()
         self.font_items_to_paths()
+        self.gizmo_items_to_paths()
+
+        # generate report
+        self.make_report()
+        #pprint.pprint(self.report)
+
+        #print("\n\nPLUGS:\n")
+        #pprint.pprint(self.loaded_plugins)
+
+        #pprint.pprint(self.gizmo_items)
+
+    def process_script(self):
 
         # prepare copy list
         self.copy_media()
 
-        # Make Nuke scripts
-        self.make_nuke_scripts()
-
-        # save report (start)
-
-        print("\n\nmedia items:\n")
-        for one in self.media_items:
-            if one['duplicate_of'] is None:
-                pprint.pprint(one)
-                # print(one['found_path_filter'])
-                # print("\n")
-                # print(one['category_files'])
-                # print(one['all_files'])
-                print('\n\n')
-
-        print("\n\nFONTS:\n")
-        # pprint.pprint(self.font_items)
-        for one in self.font_items:
-            if one['duplicate_of'] is None:
-                pprint.pprint(one)
-
-        print("\n\nPLUGS:\n")
-        pprint.pprint(self.loaded_plugins)
-
-        print("\n\nGIZMOS\n")
-        pprint.pprint(self.gizmo_items)
-
-    def process_script(self):
-        pass
-
-        # copy media
-
         # copy fonts
+        self.copy_fonts()
 
         # copy gizmos
+        self.copy_gizmos()
+
+        if self.settings['gizmos']['to_groups']:
+            self.gizmos_to_groups()
 
         # copy ocio
+
+        # Make Nuke scripts
+        self.make_nuke_scripts()
 
         # relink Nuke script
 
@@ -1142,7 +1458,7 @@ class PackNukeScript:
 
 if __name__ == "__main__":
 
-    #nuke.scriptOpen("Z:/T027_cgTests_Sept23/shots/sq02/sq02sh10/work/comp/nuke/sq02sh10_comp_v059.nk")
+    # nuke.scriptOpen("Z:/T027_cgTests_Sept23/shots/sq02/sq02sh10/work/comp/nuke/sq02sh10_comp_v059.nk")
 
     # get user info
     # anatomies is list of anatomy dicts, that contain workfile path
@@ -1150,10 +1466,17 @@ if __name__ == "__main__":
     # settings is a dict containing user picked packing settings
     anatomies, job_destination, settings = action_dialog()
     if anatomies and len(anatomies) > 0:
-        pprint.pprint(anatomies)
-        print("\n\n\n")
+        # pprint.pprint(anatomies)
+        # print("\n\n\n")
         # process each nuke script
         for anatomy in anatomies:
             one_nuke = PackNukeScript(anatomy, job_destination, settings)
             one_nuke.prepare_script()
             one_nuke.process_script()
+
+    #TODO
+    # save report
+    # do OCIO
+    # logfile
+    # relink nuke files
+
