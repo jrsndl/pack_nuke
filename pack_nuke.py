@@ -134,27 +134,27 @@ def get_nuke_pack_project_settings() -> dict:
             },
             "fonts": {
                 "enabled": True,
-                "root_template": "{job}/{folder[name]}/fonts",
-                "root_template_relink": "/vendor1_relink_root/{folder[name]}/fonts",
-                "top_folder": "",
-                "top_folder_relink": "",
+                "root_template": "{job}/_shared",
+                "root_template_relink": "/vendor1_relink_root/_shared",
+                "top_folder": "fonts",
+                "top_folder_relink": "fonts",
                 "skip_disconnected": True,
                 "skip_disabled": True
             },
             "gizmos": {
                 "enabled": True,
                 "to_groups": True,
-                "root_template": "{job}/{folder[name]}/gizmos",
-                "root_template_relink": "/vendor1_relink_root/{folder[name]}/gizmos",
-                "top_folder": "",
-                "top_folder_relink": "",
+                "root_template": "{job}/_shared",
+                "root_template_relink": "/vendor1_relink_root/_shared",
+                "top_folder": "gizmos",
+                "top_folder_relink": "gizmos",
                 "skip_disconnected": True,
                 "skip_disabled": True
             },
             "ocio": {
                 "enabled": True,
-                "root_template": "{job}/{folder[name]}/ocio",
-                "root_template_relink": "/vendor1_relink_root/{folder[name]}/ocio",
+                "root_template": "{job}/_shared/ocio",
+                "root_template_relink": "/vendor1_relink_root/_shared/ocio",
                 "top_folder": "",
                 "top_folder_relink": "",
                 "subfolders": True
@@ -322,6 +322,7 @@ class PackNukeScript:
         self.job_destination = job_destination
         self.settings = settings
 
+        self.ocio = {}
         self.media_items = []
         self.font_items = []
         self.gizmo_items = []
@@ -540,6 +541,53 @@ class PackNukeScript:
         :return:
         """
 
+        def get_ocio():
+            """
+            Gets OCIO config details
+            """
+
+            all_files = []
+            total_size = 0
+            hash_for_all = ''
+            color_management = nuke.root().knob('colorManagement').value()
+            custom_path = ''
+            cfg = nuke.root().knob('OCIO_config').value()
+
+            if os.environ.get('OCIO') is not None:
+                # env has precedence
+                custom_path = os.path.abspath(os.environ.get('OCIO')).replace("\\", "/")
+                cfg = 'custom' # pretend it is not set by environment
+            else:
+
+                if cfg == 'custom':
+                    # read custom
+                    custom_path = os.path.abspath(nuke.root().knob('customOCIOConfigPath').evaluate()).replace("\\", "/")
+
+            if custom_path != '':
+                files = glob.glob(os.path.dirname(custom_path) + '/**', recursive=True)
+                files = [f.replace("\\", "/") for f in files if os.path.isfile(f)]
+                if files is not None and len(files) > 0:
+                    # get total file size
+                    all_hashes = ''
+                    for each_file in files:
+                        size = os.path.getsize(each_file)
+                        total_size += size
+                        my_hash = get_file_hash(each_file)
+                        all_hashes += my_hash
+                        all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
+                    hash_for_all = hashlib.blake2b(all_hashes.encode()).hexdigest()
+
+                self.ocio = {
+                    'color_management': color_management,
+                    'ocio_config': cfg,
+                    'custom_path': custom_path,
+                    'all_files': all_files,
+                    'hash_for_all': hash_for_all,
+                    'total_size': total_size
+                }
+
+            return self.ocio
+
         def is_node_disconnected(node):
 
             disconnected = False
@@ -740,6 +788,10 @@ class PackNukeScript:
             }
             return item
 
+
+        # OCIO first
+        get_ocio()
+
         # progress bar total value
         all_nodes = nuke.allNodes(recurseGroups=True)
         progress_total = len(all_nodes)
@@ -764,7 +816,6 @@ class PackNukeScript:
             # check if node is a gizmo
             gizmo_name = is_node_gizmo(each_node)
             if gizmo_name != '':
-                print(f"Trying to store gizmo {str(each_node.fullName())} with name {gizmo_name}")
                 gizmo_items = store_gizmo_item(gizmo_name, gizmo_items, each_node, node_disabled, node_disconnected)
 
             # Check all knobs in Node
@@ -1198,6 +1249,44 @@ class PackNukeScript:
                 'relink': _template_full_relink + '/' + file_name
             }
 
+    def ocio_to_paths(self):
+
+        self.ocio['files'] = []
+        if self.ocio['color_management'] != 'OCIO' or self.ocio['ocio_config'] != 'custom' or self.ocio['custom_path'] == '':
+            return
+
+        _stngs = self.settings['ocio']
+        custom_folder = os.path.dirname(self.ocio['custom_path']).replace('\\', '/')
+        custom_folder_up = '/'.join(custom_folder.split('/')[:-1])
+        all_tokens = {**self.anatomy}
+        for one_file in self.ocio['all_files']:
+            path = one_file['path']
+            path_end = path
+            if path.startswith(custom_folder_up):
+                path_end = path[len(custom_folder_up):].lstrip('/')
+
+            r_t = _stngs['root_template'].format(**all_tokens).replace("\\", "/")
+            r_t_r = _stngs['root_template_relink'].format(**all_tokens).replace("\\", "/")
+            t_f = _stngs['top_folder'].format(**all_tokens).replace("\\", "/")
+            if t_f != '':
+                _template_full = r_t + '/' + t_f
+            else:
+                _template_full = r_t
+            t_f_r = _stngs['top_folder_relink'].format(**all_tokens).replace("\\", "/")
+            if t_f_r != '':
+                _template_full_relink = r_t_r + '/' + t_f_r
+            else:
+                _template_full_relink = r_t_r
+
+            item = {
+                'template': _template_full,
+                'template_relink': _template_full_relink,
+                'target': _template_full + '/' + path_end,
+                'target_exists': False,
+                'relink': _template_full_relink + '/' + path_end
+            }
+            self.ocio['files'].append(item)
+
     def gizmo_items_to_paths(self):
         """
         Fills gizmo_item['gizmo_files']
@@ -1402,8 +1491,6 @@ class PackNukeScript:
             print(item['node_name'])
         """
 
-
-
     def prepare_script(self):
 
         self.read_comp_data()
@@ -1420,6 +1507,9 @@ class PackNukeScript:
         self.media_items_to_paths()
         self.font_items_to_paths()
         self.gizmo_items_to_paths()
+        self.ocio_to_paths()
+
+        pprint.pprint(self.ocio)
 
         # generate report
         self.make_report()
@@ -1442,12 +1532,13 @@ class PackNukeScript:
         self.copy_gizmos()
 
         if self.settings['gizmos']['to_groups']:
-            self.gizmos_to_groups()
+            pass
+            #self.gizmos_to_groups()
 
         # copy ocio
 
         # Make Nuke scripts
-        self.make_nuke_scripts()
+        #self.make_nuke_scripts()
 
         # relink Nuke script
 
