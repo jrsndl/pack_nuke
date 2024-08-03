@@ -62,21 +62,27 @@ def get_nuke_pack_project_settings() -> dict:
                 "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}"
             },
             "nuke_scripts": {
-                "nuke_scripts_source": {
-                    "nuke_scripts_source_copy": True,
-                    "nuke_scripts_source_path": "{job}/{folder[name]}/{script_name}_source.nk"
+                "source": {
+                    "copy": True,
+                    "path": "{job}/{folder[name]}/{script_name}_source.nk"
                 },
-                "nuke_scripts_package": {
-                    "nuke_scripts_package_copy": True,
-                    "nuke_scripts_package_path": "{job}/{folder[name]}/{script_name}_check.nk",
-                    "nuke_scripts_package_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_check.nk",
-                    "nuke_scripts_package_relative": True
+                "package": {
+                    "copy": True,
+                    "path": "{job}/{folder[name]}/{script_name}_check.nk",
+                    "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_check.nk",
+                    "relative": True,
+                    "relative_custom_project": False,
+                    "relative_custom_project_template": "{job}",
+                    "relative_above_script": 1
                 },
-                "nuke_scripts_target": {
-                    "nuke_scripts_target_copy": True,
-                    "nuke_scripts_target_path": "{job}/{folder[name]}/{script_name}_target.nk",
-                    "nuke_scripts_target_path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_target.nk",
-                    "nuke_scripts_target_relative": True
+                "target": {
+                    "copy": True,
+                    "path": "{job}/{folder[name]}/{script_name}_target.nk",
+                    "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_target.nk",
+                    "relative": True,
+                    "relative_custom_project": False,
+                    "relative_custom_project_template": "{job}",
+                    "relative_above_script": 1
                 }
             },
             "hashes": {
@@ -1169,6 +1175,18 @@ class PackNukeScript:
             cats = media_item.get('categories')
             all_tokens = {**self.anatomy, **media_item['tokens']}
 
+            # get nuke compatible file name from glob filter, ie foo.????.exr -> foo.%04d.exr
+            nuke_filter = os.path.basename(media_item['found_path_filter'])
+            print(f" Filter before {nuke_filter}")
+            try:
+                glob_split = re.match('([^\?]+)(\?*)([^\?]+)', nuke_filter)
+                if glob_split.group(2):
+                    nuke_filter = glob_split.group(1) + '%0' + str(len(glob_split.group(2))) + 'd' + glob_split.group(3)
+                    print(f" Filter after {nuke_filter} {glob_split.group(2)}")
+            except:
+                # no ? in file name, so it is a single file
+                pass
+
             # get filename but skip file sequence counter, use glob filter
             _ = os.path.basename(media_item['found_path_filter']).split('?')
             clean_name = _[0].rstrip('._-')
@@ -1197,15 +1215,16 @@ class PackNukeScript:
                     for one_file in all_file_names:
                         target = r_t + '/' + t_f + '/' + one_file
                         targets.append(target)
-                        if os.path.exists(target):
-                            relinks.append(r_t_r + '/' + t_f_r + '/' + one_file)
+                        relinks.append(r_t_r + '/' + t_f_r + '/' + one_file)
 
                     media_item['category_files'][one_category] = {
                         'template': r_t + '/' + t_f,
                         'template_relink': r_t_r + '/' + t_f_r,
                         'target': targets,
+                        'target_nuke': r_t + '/' + t_f + '/' + nuke_filter,
                         'target_exists': False,
-                        'relink': relinks
+                        'relink': relinks,
+                        'relink_nuke': r_t_r + '/' + t_f_r + '/' + nuke_filter
                     }
 
     def font_items_to_paths(self):
@@ -1242,6 +1261,7 @@ class PackNukeScript:
                 _template_full_relink = r_t_r
 
             font_item['font_files'] = {
+                'path': font_item['path'],
                 'template': _template_full,
                 'template_relink': _template_full_relink,
                 'target': _template_full + '/' + file_name,
@@ -1279,6 +1299,7 @@ class PackNukeScript:
                 _template_full_relink = r_t_r
 
             item = {
+                'path': path,
                 'template': _template_full,
                 'template_relink': _template_full_relink,
                 'target': _template_full + '/' + path_end,
@@ -1320,6 +1341,7 @@ class PackNukeScript:
                 _template_full_relink = r_t_r
 
             item['gizmo_files'] = {
+                'path': item['path'],
                 'template': _template_full,
                 'template_relink': _template_full_relink,
                 'target': _template_full + '/' + file_name,
@@ -1419,6 +1441,19 @@ class PackNukeScript:
         end = timeit.timeit()
         print("Coping gizmos took {} seconds".format(int(end - start)))
 
+    def copy_ocio(self):
+        start = timeit.timeit()
+
+        ocio_files = self.ocio.get('files')
+        if ocio_files is None:
+            return
+        for item in self.ocio['files']:
+            os.makedirs(os.path.dirname(item['target']), exist_ok=True)
+            self.copy_file(item['path'], item['target'])
+
+        end = timeit.timeit()
+        print("Coping ocio took {} seconds".format(int(end - start)))
+
     def gizmos_to_groups(self):
 
         def deselect_all():
@@ -1454,7 +1489,115 @@ class PackNukeScript:
                 new_group.setInput(x, None)
                 if inputs[x]:
                     new_group.connectInput(x, inputs[x])
-                # print 'connecting output: %s to input: %s' % (inputs[x].knob('name').value(), new_group.input(x).name())
+
+    def make_relative(self, my_path, my_root, up_allowed=True):
+
+        my_root.replace('\\', '/').rstrip('/')
+        my_path.replace('\\', '/').rstrip('/')
+        rel = ''
+        up_cnt = 0
+        all_fix = ''
+        root_fix = ''
+        path_fix = ''
+        if (len(my_root) <= len(my_path)) and (my_path[:len(my_root)] == my_root):
+            # start matches
+            rel = my_path[len(my_root):]
+            if rel[0] == '/':
+                rel = my_path[len(my_root) + 1:]
+        else:
+            if up_allowed:
+                # let's see if we can match partially
+                root_s = my_root.split('/')
+                path_s = my_path.split('/')
+                c = []
+                c_fix = []
+                up_cnt = 1
+                if root_s[0].lower() == path_s[0].lower():
+                    for cnt in range(len(my_path)):
+                        if root_s[cnt] == path_s[cnt]:
+                            pass
+                        else:
+                            for one in range(cnt, len(root_s) - 1):
+                                c.append('..')
+                                up_cnt += 1
+                            for one in range(cnt, len(path_s)):
+                                c.append(path_s[one])
+                                c_fix.append(path_s[one])
+                            break
+                    rel = '/'.join(c)
+                    # _fix adjusts the root to remove as many folders up to eliminate ../ as necessary
+                    root_fix = '/'.join(root_s[:-1 * up_cnt])
+                    # print('root_fix: ' + str(root_fix))
+                    path_fix = '/'.join(c_fix)
+                    # print('path_fix: ' + str(path_fix))
+                    all_fix = root_fix + '/' + path_fix
+                else:
+                    pass
+        return {'relative': rel, 'up_cnt': up_cnt, 'all_fix': all_fix, 'root_fix': root_fix, 'path_fix': path_fix}
+
+    def relink(self, script, relative=True, above=0, project_custom=False, project=''):
+        """
+        Relink current nuke script to new paths
+        """
+
+        def get_node_and_path(item):
+
+            if item['categories'] is None or item['categories'] == []:
+                return None, None
+            if item['category_files'] is None or item['category_files'] == []:
+                return None, None
+            first_category = item['categories'][0]
+            cat_files = item['category_files'].get(first_category)
+            if cat_files is None:
+                return None, None
+            target_nuke = cat_files.get('target_nuke')
+            if target_nuke is None:
+                return None, None
+            return item['node_name'], target_nuke,
+
+        tile_colors = {
+            'brown': 3477542145,  # print(int('%02x%02x%02x%02x' % (207,71,21,1),16))
+            'lime_green': 3034977281,  # print(int('%02x%02x%02x%02x' % (180,230,20,1),16))
+            'deep_green': 176695809,  # print(int('%02x%02x%02x%02x' % (10,136,42,1),16))
+            'violet': 2400240129,  # print(int('%02x%02x%02x%02x' % (143,16,194,1),16))
+            'fuchsia': 2400240129  # print(int('%02x%02x%02x%02x' % (168,39,178,1),16))
+        }
+
+        # set project root for relative paths
+        script = script.replace('\\', '/')
+        if relative:
+            if project_custom:
+                prj = project.replace('\\', '/').rstrip('/')
+                project = prj
+            else:
+                if above == 0:
+                    prj = '[file dirname [knob root.name]]'
+                    project = os.path.dirname(script)
+                else:
+                    prj = '[join [lrange [split [file dirname [knob root.name]] "/"] 0 end-' + str(int(above)) + ' ] "/"]'
+                    project = '/'.join(os.path.dirname(script).split('/')[:-1 * above])
+            nuke.root().knob("project_directory").setValue(prj)
+
+
+        for item in self.media_items:
+            if item['duplicate_of'] is None:
+                node, target_nuke = get_node_and_path(item)
+            else:
+                # TODO get path from dedup node
+                dup_node = item['node_name']
+                node, target_nuke = get_node_and_path(item)
+
+            if relative:
+                rel = self.make_relative(target_nuke, project)
+                target_nuke = rel['relative']
+                node['tile_color'].setValue(tile_colors['lime_green'])
+            else:
+                node['tile_color'].setValue(tile_colors['deep_green'])
+            node['file'].setValue(target_nuke)
+
+            print(node['name'].value())
+            print("\n")
+        nuke.scriptSave(script)
 
     def make_nuke_scripts(self):
 
@@ -1466,23 +1609,31 @@ class PackNukeScript:
         nuke_script = nuke_script_full.split('/')[-1]
         self.anatomy['script_name'] = nuke_script[:-3]
 
-        nuke_source = self.settings['nuke_scripts']['nuke_scripts_source']['nuke_scripts_source_path'].format_map(
+        nuke_source = self.settings['nuke_scripts']['source']['path'].format_map(
             Default(self.anatomy)).replace("\\", "/")
         os.makedirs(os.path.dirname(nuke_source), exist_ok=True)
         shutil.copy2(nuke_script_full, nuke_source)
 
-        nuke_package = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_path'].format_map(
+        nuke_package = self.settings['nuke_scripts']['package']['path'].format_map(
             Default(self.anatomy)).replace("\\", "/")
         os.makedirs(os.path.dirname(nuke_package), exist_ok=True)
-        shutil.copy2(nuke_script_full, nuke_package)
 
-        nuke_target = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_path'].format_map(
+        nuke.scriptSaveAs(nuke_package, overwrite=1)
+        relative = self.settings['nuke_scripts']['package']['relative']
+        project_custom = self.settings['nuke_scripts']['package']['relative_custom_project']
+        project_template = self.settings['nuke_scripts']['package']['relative_custom_project_template']
+        project = project_template.format_map(Default(self.anatomy)).replace("\\", "/")
+        above = self.settings['nuke_scripts']['package']['relative_above_script']
+
+        self.relink(script=nuke_package, relative=relative, above=above, project_custom=project_custom, project=project)
+
+        nuke_target = self.settings['nuke_scripts']['target']['path'].format_map(
             Default(self.anatomy)).replace("\\", "/")
         os.makedirs(os.path.dirname(nuke_target), exist_ok=True)
         shutil.copy2(nuke_script_full, nuke_target)
 
-        nuke_package_relative = self.settings['nuke_scripts']['nuke_scripts_package']['nuke_scripts_package_relative']
-        nuke_target_relative = self.settings['nuke_scripts']['nuke_scripts_target']['nuke_scripts_target_relative']
+
+        nuke_target_relative = self.settings['nuke_scripts']['target']['relative']
 
         """
         nuke.scriptOpen(nuke_package)
@@ -1519,6 +1670,7 @@ class PackNukeScript:
         #pprint.pprint(self.loaded_plugins)
 
         #pprint.pprint(self.gizmo_items)
+        pprint.pprint(self.media_items)
 
     def process_script(self):
 
@@ -1536,9 +1688,10 @@ class PackNukeScript:
             #self.gizmos_to_groups()
 
         # copy ocio
+        self.copy_ocio()
 
         # Make Nuke scripts
-        #self.make_nuke_scripts()
+        self.make_nuke_scripts()
 
         # relink Nuke script
 
