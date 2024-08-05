@@ -1,0 +1,112 @@
+{
+    "job": {
+        "job_name_default": "PackNuke_{place_source}2{place_target}_{timestamp}",
+        "job_name_check": "^PackNuke_(.+)2(.+)_(\\d{6}_\\d{4})_([-]?\\d{4})[_]?(?:.*)$",
+        "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}"
+    },
+    "nuke_scripts": {
+        "source": {
+            "copy": true,
+            "path": "{job}/{folder[name]}/{script_name}_source.nk"
+        },
+        "package": {
+            "copy": true,
+            "path": "{job}/{folder[name]}/{script_name}_check.nk",
+            "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_check.nk",
+            "relative": true,
+            "relative_custom_project": false,
+            "relative_custom_project_template": "{job}",
+            "relative_above_script": 1
+        },
+        "target": {
+            "copy": true,
+            "path": "{job}/{folder[name]}/{script_name}_target.nk",
+            "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_target.nk",
+            "relative": true,
+            "relative_custom_project": false,
+            "relative_custom_project_template": "{job}",
+            "relative_above_script": 2
+        }
+    },
+    "hashes": {
+        "hashes_generate": true
+    },
+    "places": {
+        "studio": {
+            "long_name": "Great Studio",
+            "use_nuke_path": false,
+            "path_regex": "^.*\/(DP\\d4_.*)\/.*$"
+        },
+        "vendor1": {
+            "long_name": "Amazing Vendor",
+            "use_nuke_path": false,
+            "path_regex": "^.*(projects).*$"
+        }
+    },
+    "categories": {
+        "test_category": {
+            "path": {
+                "root_template": "{job}/{folder[name]}/{category}",
+                "root_template_relink": "{job}/{folder[name]}/{category}",
+                "top_folder": "{clean_name}_{node}",
+                "top_folder_relink": "{clean_name}_{node}"
+            },
+            "filter_options": {
+                "skip_disconnected": true,
+                "skip_disabled": true,
+                "combine_filters": "OR"
+            },
+            "filters": [
+                {
+                    "source": "File Name",
+                    "search": ".*\\.(\\w{2,4})$",
+                    "check": ["exr", "jpg", "jpeg", "mov"],
+                    "token_name": "extension",
+                    "invert": false
+                },
+                {
+                    "source": "Full Path",
+                    "search": ".*\/(v\\d\\d\\d)\/.*",
+                    "check": [],
+                    "token_name": "version_from_path",
+                    "invert": false
+                },
+                {
+                    "source": "Node Class",
+                    "search": "Read Write",
+                    "check": [],
+                    "token_name": "class_read_write",
+                    "invert": false
+                }
+            ]
+        }
+    },
+    "fonts": {
+        "enabled": true,
+        "root_template": "{job}/_shared",
+        "root_template_relink": "/vendor1_relink_root/_shared",
+        "top_folder": "fonts",
+        "top_folder_relink": "fonts",
+        "skip_disconnected": true,
+        "skip_disabled": true
+    },
+    "gizmos": {
+        "enabled": true,
+        "to_groups": true,
+        "root_template": "{job}/_shared",
+        "root_template_relink": "/vendor1_relink_root/_shared",
+        "top_folder": "gizmos",
+        "top_folder_relink": "gizmos",
+        "skip_disconnected": true,
+        "skip_disabled": true
+    },
+    "ocio": {
+        "enabled": true,
+        "root_template": "{job}/_shared/ocio",
+        "root_template_relink": "/vendor1_relink_root/_shared/ocio",
+        "top_folder": "",
+        "top_folder_relink": "",
+        "subfolders": true,
+        "relative": true
+    }
+}
