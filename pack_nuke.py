@@ -1,15 +1,17 @@
-import nuke
 import datetime
-import os
 import glob
-import re
+import hashlib
+import logging
+import os
+import platform
 import pprint
+import re
 import shutil
 import subprocess
-import platform
+import time
 import timeit
-import hashlib
 
+import nuke
 
 def get_default_category() -> dict:
     """Get the default category if not specified by settings
@@ -82,7 +84,7 @@ def get_nuke_pack_project_settings() -> dict:
                     "relative": True,
                     "relative_custom_project": False,
                     "relative_custom_project_template": "{job}",
-                    "relative_above_script": 1
+                    "relative_above_script": 2
                 }
             },
             "hashes": {
@@ -109,7 +111,7 @@ def get_nuke_pack_project_settings() -> dict:
                         "top_folder_relink": "{clean_name}_{node}"
                     },
                     "filter_options": {
-                        "skip_disconnected": False,
+                        "skip_disconnected": True,
                         "skip_disabled": True,
                         "combine_filters": "OR"
                     },
@@ -163,7 +165,8 @@ def get_nuke_pack_project_settings() -> dict:
                 "root_template_relink": "/vendor1_relink_root/_shared/ocio",
                 "top_folder": "",
                 "top_folder_relink": "",
-                "subfolders": True
+                "subfolders": True,
+                "relative": True
             }
         }
     }
@@ -1177,12 +1180,12 @@ class PackNukeScript:
 
             # get nuke compatible file name from glob filter, ie foo.????.exr -> foo.%04d.exr
             nuke_filter = os.path.basename(media_item['found_path_filter'])
-            print(f" Filter before {nuke_filter}")
+            #print(f" Filter before {nuke_filter}")
             try:
                 glob_split = re.match('([^\?]+)(\?*)([^\?]+)', nuke_filter)
                 if glob_split.group(2):
                     nuke_filter = glob_split.group(1) + '%0' + str(len(glob_split.group(2))) + 'd' + glob_split.group(3)
-                    print(f" Filter after {nuke_filter} {glob_split.group(2)}")
+                    #print(f" Filter after {nuke_filter} {glob_split.group(2)}")
             except:
                 # no ? in file name, so it is a single file
                 pass
@@ -1553,7 +1556,7 @@ class PackNukeScript:
             target_nuke = cat_files.get('target_nuke')
             if target_nuke is None:
                 return None, None
-            return item['node_name'], target_nuke,
+            return item['node_name'], target_nuke
 
         tile_colors = {
             'brown': 3477542145,  # print(int('%02x%02x%02x%02x' % (207,71,21,1),16))
@@ -1576,27 +1579,51 @@ class PackNukeScript:
                 else:
                     prj = '[join [lrange [split [file dirname [knob root.name]] "/"] 0 end-' + str(int(above)) + ' ] "/"]'
                     project = '/'.join(os.path.dirname(script).split('/')[:-1 * above])
-            nuke.root().knob("project_directory").setValue(prj)
-
+            nuke.root()["project_directory"].setValue(prj)
 
         for item in self.media_items:
             if item['duplicate_of'] is None:
-                node, target_nuke = get_node_and_path(item)
+                node_name, target_nuke = get_node_and_path(item)
+                color = tile_colors['lime_green']
             else:
-                # TODO get path from dedup node
-                dup_node = item['node_name']
-                node, target_nuke = get_node_and_path(item)
+                node_name, target_nuke = get_node_and_path(item['duplicate_of'])
+                node_name = item['node_name']
+                color = tile_colors['deep_green']
+            if node_name is None or target_nuke is None:
+                continue
 
             if relative:
                 rel = self.make_relative(target_nuke, project)
                 target_nuke = rel['relative']
-                node['tile_color'].setValue(tile_colors['lime_green'])
-            else:
-                node['tile_color'].setValue(tile_colors['deep_green'])
-            node['file'].setValue(target_nuke)
 
-            print(node['name'].value())
-            print("\n")
+            node = nuke.toNode(node_name)
+            node['file'].setValue(target_nuke)
+            node['tile_color'].setValue(color)
+
+        # OCIO
+        if self.ocio['color_management'] == 'OCIO' and self.ocio['ocio_config'] == 'custom':
+            for one_file in self.ocio['files']:
+
+                if one_file['path'] == self.ocio['custom_path']:
+                    print(f"found it {one_file['path']}")
+                    if not self.settings['ocio']['relative']:
+                        print("ABSOLUTE")
+                        nuke.root()['customOCIOConfigPath'].setValue(one_file['target'])
+                        nuke.root()['OCIO_config'].setValue('custom')
+                    else:
+                        print("RELATIVE")
+                        nuke_script = nuke.root().knob('name').evaluate().replace("\\", "/")
+                        print(nuke_script)
+                        repl_dir = self.make_relative(one_file['target'], nuke_script)
+                        pprint.pprint(repl_dir)
+                        if repl_dir['relative'] is not None and repl_dir['relative'] != '':
+                            if repl_dir['up_cnt'] > 0:
+                                new_ocio = '[join [lrange [split [file dirname [knob root.name]] "/"] 0 end-' + str(
+                                    int(repl_dir['up_cnt'])-1) + ' ] "/"]/' + repl_dir['path_fix']
+                                nuke.root()['customOCIOConfigPath'].setValue(new_ocio)
+                                nuke.root()['OCIO_config'].setValue('custom')
+                    break
+
         nuke.scriptSave(script)
 
     def make_nuke_scripts(self):
@@ -1614,6 +1641,7 @@ class PackNukeScript:
         os.makedirs(os.path.dirname(nuke_source), exist_ok=True)
         shutil.copy2(nuke_script_full, nuke_source)
 
+        # PACKAGE
         nuke_package = self.settings['nuke_scripts']['package']['path'].format_map(
             Default(self.anatomy)).replace("\\", "/")
         os.makedirs(os.path.dirname(nuke_package), exist_ok=True)
@@ -1624,14 +1652,19 @@ class PackNukeScript:
         project_template = self.settings['nuke_scripts']['package']['relative_custom_project_template']
         project = project_template.format_map(Default(self.anatomy)).replace("\\", "/")
         above = self.settings['nuke_scripts']['package']['relative_above_script']
-
         self.relink(script=nuke_package, relative=relative, above=above, project_custom=project_custom, project=project)
 
+        # TARGET
         nuke_target = self.settings['nuke_scripts']['target']['path'].format_map(
             Default(self.anatomy)).replace("\\", "/")
         os.makedirs(os.path.dirname(nuke_target), exist_ok=True)
-        shutil.copy2(nuke_script_full, nuke_target)
-
+        nuke.scriptSaveAs(nuke_target, overwrite=1)
+        relative = self.settings['nuke_scripts']['package']['relative']
+        project_custom = self.settings['nuke_scripts']['target']['relative_custom_project']
+        project_template = self.settings['nuke_scripts']['target']['relative_custom_project_template']
+        project = project_template.format_map(Default(self.anatomy)).replace("\\", "/")
+        above = self.settings['nuke_scripts']['target']['relative_above_script']
+        self.relink(script=nuke_target, relative=relative, above=above, project_custom=project_custom, project=project)
 
         nuke_target_relative = self.settings['nuke_scripts']['target']['relative']
 
@@ -1660,8 +1693,6 @@ class PackNukeScript:
         self.gizmo_items_to_paths()
         self.ocio_to_paths()
 
-        pprint.pprint(self.ocio)
-
         # generate report
         self.make_report()
         #pprint.pprint(self.report)
@@ -1670,7 +1701,7 @@ class PackNukeScript:
         #pprint.pprint(self.loaded_plugins)
 
         #pprint.pprint(self.gizmo_items)
-        pprint.pprint(self.media_items)
+        #pprint.pprint(self.media_items)
 
     def process_script(self):
 
@@ -1693,21 +1724,21 @@ class PackNukeScript:
         # Make Nuke scripts
         self.make_nuke_scripts()
 
-        # relink Nuke script
-
-        # verify files
-
-        # save report (end)
+        # save report (end) m
 
 
 if __name__ == "__main__":
-
-    # nuke.scriptOpen("Z:/T027_cgTests_Sept23/shots/sq02/sq02sh10/work/comp/nuke/sq02sh10_comp_v059.nk")
+    # log
+    log = logging.getLogger("mylog")
+    log.setLevel(logging.DEBUG)
+    log.info('Started at: ' + time.strftime("%Y-%m-%d, %H:%M"))
 
     # get user info
     # anatomies is list of anatomy dicts, that contain workfile path
     # job destination is a parent folder of the package job
     # settings is a dict containing user picked packing settings
+
+
     anatomies, job_destination, settings = action_dialog()
     if anatomies and len(anatomies) > 0:
         # pprint.pprint(anatomies)
@@ -1719,8 +1750,8 @@ if __name__ == "__main__":
             one_nuke.process_script()
 
     #TODO
+    # gui
     # save report
-    # do OCIO
     # logfile
-    # relink nuke files
+
 
