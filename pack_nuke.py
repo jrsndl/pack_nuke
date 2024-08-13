@@ -1,6 +1,8 @@
+import csv
 import datetime
 import glob
 import hashlib
+import json
 import logging
 import os
 import platform
@@ -13,323 +15,27 @@ import timeit
 
 import nuke
 
-def get_default_category() -> dict:
-    """Get the default category if not specified by settings
-
-    Returns:
-         dict: Default category
-    """
-    default_category = {
-        "default_category": {
-            "path": {
-                "root_template": "{job}/{folder[name]}/{category}",
-                "root_template_relink": "{job}/{folder[name]}/{category}",
-                "top_folder": "{node}",
-                "top_folder_relink": "{node}"
-            },
-            "filter_options": {
-                "skip_disconnected": True,
-                "skip_disabled": True,
-                "combine_filters": "AND"
-            },
-            "filters": [
-                {
-                    "source": "File Name",
-                    "search": ".*\.(\w{2,4})$",
-                    "check": [],
-                    "token_name": "extension",
-                    "invert": False
-                }
-            ]
-        }
-    }
-    return default_category
-
-
-def get_nuke_pack_project_settings() -> dict:
-    """Get the project settings
-
-    Returns:
-         dict: all nuke pack project settings
-    """
-
-    # for testing only
-    # TODO get project settings
-
-    settings = \
-        {"toVendor1": {
-            "job": {
-                "job_name_default": "PackNuke_{place_source}2{place_target}_{timestamp}",
-                "job_name_check": "^PackNuke_(.+)2(.+)_(\d{6}_\d{4})_([-]?\d{4})[_]?(?:.*)$",
-                "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}"
-            },
-            "nuke_scripts": {
-                "source": {
-                    "copy": True,
-                    "path": "{job}/{folder[name]}/{script_name}_source.nk"
-                },
-                "package": {
-                    "copy": True,
-                    "path": "{job}/{folder[name]}/{script_name}_check.nk",
-                    "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_check.nk",
-                    "relative": True,
-                    "relative_custom_project": False,
-                    "relative_custom_project_template": "{job}",
-                    "relative_above_script": 1
-                },
-                "target": {
-                    "copy": True,
-                    "path": "{job}/{folder[name]}/{script_name}_target.nk",
-                    "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_target.nk",
-                    "relative": True,
-                    "relative_custom_project": False,
-                    "relative_custom_project_template": "{job}",
-                    "relative_above_script": 2
-                }
-            },
-            "hashes": {
-                "hashes_generate": True
-            },
-            "places": {
-                "studio": {
-                    "long_name": "Great Studio",
-                    "use_nuke_path": False,
-                    "path_regex": "^.*\/(DP\d4_.*)\/.*$"
-                },
-                "vendor1": {
-                    "long_name": "Amazing Vendor",
-                    "use_nuke_path": False,
-                    "path_regex": "^.*(projects).*$"
-                }
-            },
-            "categories": {
-                "test_category": {
-                    "path": {
-                        "root_template": "{job}/{folder[name]}/{category}",
-                        "root_template_relink": "{job}/{folder[name]}/{category}",
-                        "top_folder": "{clean_name}_{node}",
-                        "top_folder_relink": "{clean_name}_{node}"
-                    },
-                    "filter_options": {
-                        "skip_disconnected": True,
-                        "skip_disabled": True,
-                        "combine_filters": "OR"
-                    },
-                    "filters": [
-                        {
-                            "source": "File Name",
-                            "search": ".*\.(\w{2,4})$",
-                            "check": ["exr", "jpg", "jpeg", "mov"],
-                            "token_name": "extension",
-                            "invert": False
-                        },
-                        {
-                            "source": "Full Path",
-                            "search": ".*\/(v\d\d\d)\/.*",
-                            "check": [],
-                            "token_name": "version_from_path",
-                            "invert": False
-                        },
-                        {
-                            "source": "Node Class",
-                            "search": "Read Write",
-                            "check": [],
-                            "token_name": "class_read_write",
-                            "invert": False
-                        }
-                    ]
-                }
-            },
-            "fonts": {
-                "enabled": True,
-                "root_template": "{job}/_shared",
-                "root_template_relink": "/vendor1_relink_root/_shared",
-                "top_folder": "fonts",
-                "top_folder_relink": "fonts",
-                "skip_disconnected": True,
-                "skip_disabled": True
-            },
-            "gizmos": {
-                "enabled": True,
-                "to_groups": True,
-                "root_template": "{job}/_shared",
-                "root_template_relink": "/vendor1_relink_root/_shared",
-                "top_folder": "gizmos",
-                "top_folder_relink": "gizmos",
-                "skip_disconnected": True,
-                "skip_disabled": True
-            },
-            "ocio": {
-                "enabled": True,
-                "root_template": "{job}/_shared/ocio",
-                "root_template_relink": "/vendor1_relink_root/_shared/ocio",
-                "top_folder": "",
-                "top_folder_relink": "",
-                "subfolders": True,
-                "relative": True
-            }
-        }
-    }
-    return settings
-
-
-def get_anatomy() -> dict:
-    """Get the folder anatomy
-
-    Returns:
-         dict: project anatomy of one folder
-    """
-    # for testing only
-    # TODO get anatomy
-
-    anatomy = {
-        "root[work]": "z:",
-        "root": {
-            "work": "z:"
-        },
-        "studio[name]": "Dazzle",
-        "studio[code]": "dzl",
-        "user": "john.doe",
-        "project": {
-            "name": "T027_cgTests_Sept23",
-            "code": "dp1234_prj",
-        },
-        "asset": "mw_119_12_0340",
-        "folder": {
-            "name": "mw_119_12_0340"
-        },
-        "hierarchy": "shots/114_23",
-        "parent": "114_23",
-        "task[name]": "comp",
-        "task[type]": "Compositing",
-        "task[short]": "comp",
-        "app": "nuke",
-        "d": "30",
-        "dd": "26",
-        "ddd": "Thu",
-        "dddd": "Thursday",
-        "m": "5",
-        "mm": "07",
-        "mmm": "May",
-        "mmmm": "May",
-        "yy": "24",
-        "yyyy": "2024",
-        "H": "10",
-        "HH": "10",
-        "h": "10",
-        "hh": "10",
-        "ht": "AM",
-        "M": "23",
-        "MM": "23",
-        "S": "6",
-        "SS": "06",
-        "username": "john.doe",
-        "family": "render",
-        "subset": "renderCompMain",
-        "version": 1,
-        "resolution_width": 4096,
-        "resolution_height": 2160,
-        "pixel_aspect": 1.0,
-        "fps": 25.0,
-        "workfile": "path/to/workfile.nk"
-    }
-    return anatomy
-
-
-def action_dialog():
-    # for testing
-    # TODO make action dialog, get use input, return anatomy for every workfile
-
-    class Default(dict):
-        def __missing__(self, key):
-            return key
-
-    def my_time():
-        """
-        Used for timestamping packages
-        Stores UTC time, and adds UTC offset for user comfort
-        Offset assumes plus sign, unless - present
-        :return:
-        """
-        # get utc time YYMMDD-HHMM_
-        utc = datetime.datetime.now(datetime.timezone.utc).strftime('%y%m%d_%H%M_')
-        # get utc to local time offset, this is just for user
-        offset = datetime.datetime.now(datetime.timezone.utc).astimezone().strftime('%z').replace('+', '')
-        return utc + offset
-
-
-    # get project settings
-    settings = get_nuke_pack_project_settings()
-    profile_name_first = list(settings)[0]
-
-    profile_names = " ".join(list(settings))
-    job_default_folder = settings[profile_name_first]["job"]["job_name_default"]
-    job_default_check = settings[profile_name_first]["job"]["job_name_check"]
-    job_default_path = settings[profile_name_first]["job"]["job_root"]
-
-    # places
-    job_places = list(settings[profile_name_first]["places"].keys())
-    if job_places is None or len(job_places) < 2:
-        print("Bad config, need two or more places")
-    # current place can be defined by environment
-    _place_target = job_places[1]
-    if os.environ.get('PACK_NUKE_PLACE') is not None:
-        _place_source = os.environ.get('PACK_NUKE_PLACE')
-        if _place_source == job_places[1]:
-            _place_target = job_places[0]
-    else:
-        _place_source = job_places[0]
-
-    # Get project anatomy, and extend it with more tokens
-    _timestamp = my_time()
-    anatomy = get_anatomy()
-    more_tokens = {
-        "place_source": _place_source,
-        "place_target": _place_target,
-        "timestamp": _timestamp
-    }
-    anatomy.update(more_tokens)
-
-
-    # show dialog
-    # TODO
-
-    # fake user input
-    user_job_folder = job_default_folder.format_map(Default(anatomy)).replace("\\", "/")
-    user_job_path = job_default_path.format_map(Default(anatomy)).replace("\\", "/")
-    user_job_profile = profile_name_first
-    place_source = _place_source
-    place_target = _place_target
-
-    # validate user input
-    if not re.match(job_default_check, user_job_folder):
-        print("Error! Make sure folder name matches convention:\n{}\n{}".format(job_default_check, user_job_folder))
-
-    job_destination = user_job_path + "/" + user_job_folder  # no backslash, nuke hates it
-
-    # now get a list of "workfile anatomies"
-    # will fake it for now
-    anatomy = get_anatomy()
-    more_tokens = {
-        "place_source": place_source,
-        "place_target": place_target,
-        "timestamp": _timestamp,
-        'job': job_destination,  # add job name
-        'job_path': user_job_path,
-        'job_folder': user_job_folder
-    }
-    anatomy.update(more_tokens)
-    anatomies = [anatomy]  # fake it for one Nuke script, for testing
-
-    return anatomies, job_destination, settings.get(user_job_profile)
-
 
 class PackNukeScript:
-    def __init__(self, anatomy, job_destination, settings):
+    def __init__(self, nuke_file, anatomy, settings, row_id, source_place, target_place):
 
         self.anatomy = anatomy
-        self.job_destination = job_destination
         self.settings = settings
+        self.row_id = row_id
+
+        # add more to anatomy
+        nuke_script_full = nuke_file.replace('\\', '/')
+        nuke_script = nuke_script_full.split('/')[-1][:-3]
+        more_tokens = {
+            "place_source": source_place,
+            "place_target": target_place,
+            "timestamp": self.settings['job']['timestamp'],
+            'job': self.settings['job']['path'],  # add job full path
+            'job_name': self.settings['job']['name'],
+            'script_path': nuke_script_full,
+            'script_name': nuke_script
+        }
+        self.anatomy.update(more_tokens)
 
         self.ocio = {}
         self.media_items = []
@@ -338,6 +44,41 @@ class PackNukeScript:
         self.loaded_plugins = []
         self.categories = {}
         self.media_copy_list = []
+
+        # open Nuke script
+        nuke.scriptOpen(nuke_script_full)
+
+    def get_default_category(self) -> dict:
+        """Get the default category if not specified by settings
+
+        Returns:
+             dict: Default category
+        """
+        default_category = {
+            "default_category": {
+                "path": {
+                    "root_template": "{job}/{folder[name]}/{category}",
+                    "root_template_relink": "{job}/{folder[name]}/{category}",
+                    "top_folder": "{node}",
+                    "top_folder_relink": "{node}"
+                },
+                "filter_options": {
+                    "skip_disconnected": True,
+                    "skip_disabled": True,
+                    "combine_filters": "AND"
+                },
+                "filters": [
+                    {
+                        "source": "File Name",
+                        "search": ".*\.(\w{2,4})$",
+                        "check": [],
+                        "token_name": "extension",
+                        "invert": False
+                    }
+                ]
+            }
+        }
+        return default_category
 
     def file_sequence_to_glob(self, path):
         """
@@ -586,14 +327,14 @@ class PackNukeScript:
                         all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
                     hash_for_all = hashlib.blake2b(all_hashes.encode()).hexdigest()
 
-                self.ocio = {
-                    'color_management': color_management,
-                    'ocio_config': cfg,
-                    'custom_path': custom_path,
-                    'all_files': all_files,
-                    'hash_for_all': hash_for_all,
-                    'total_size': total_size
-                }
+            self.ocio = {
+                'color_management': color_management,
+                'ocio_config': cfg,
+                'custom_path': custom_path,
+                'all_files': all_files,
+                'hash_for_all': hash_for_all,
+                'total_size': total_size
+            }
 
             return self.ocio
 
@@ -799,7 +540,9 @@ class PackNukeScript:
 
 
         # OCIO first
+        log.info("Read OCIO")
         get_ocio()
+        log.info(pprint.pformat(self.ocio, indent=4))
 
         # progress bar total value
         all_nodes = nuke.allNodes(recurseGroups=True)
@@ -890,6 +633,7 @@ class PackNukeScript:
             i_node += 1
 
         self.media_items = media_items
+        log.info(pprint.pformat(self.media_items, indent=4))
         self.font_items = get_font_info(font_items)
         self.gizmo_items = gizmo_items
         self.loaded_plugins = get_loaded_plugins()
@@ -988,8 +732,62 @@ class PackNukeScript:
                 }
                 report.append(item)
 
+        for one in self.loaded_plugins:
+            item = {
+                'type': 'plugin',
+                'info': one,
+                'node_class': '',
+                'node_name': '',
+                'file_name': '',
+                'extension': '',
+                'size': 0,
+                'categories': '',
+                'node_disabled': False,
+                'node_disconnected': False,
+                'path': '',
+                'file_hash': '',
+                'file_number': 0,
+                'hash_for_all': '',
+                'place_source': '',
+                'place_target': '',
+                'timestamp': self.anatomy['timestamp']
+            }
+            report.append(item)
+
+        # OCIO
+        t = ''
+        for k, v in self.ocio.items():
+            if k in ['color_management', 'ocio_config', 'custom_path']:
+                t += f"{k}:{v}; "
+        item = {
+            'type': 'color_management',
+            'info': t,
+            'node_class': '',
+            'node_name': '',
+            'file_name': '',
+            'extension': '',
+            'size': self.ocio['total_size'],
+            'categories': '',
+            'node_disabled': False,
+            'node_disconnected': False,
+            'path': '',
+            'file_hash': '',
+            'file_number': len(self.ocio['all_files']),
+            'hash_for_all': self.ocio['hash_for_all'],
+            'place_source': '',
+            'place_target': '',
+            'timestamp': self.anatomy['timestamp']
+        }
+        report.append(item)
+
         self.report = report
 
+        # Write the report to _pack_nuke folder as csv
+        pth = self.settings['job']['path'] + '/_pack_nuke/' + self.row_id + '.csv'
+        with open(pth, 'w', newline='') as output_file:
+            dict_writer = csv.DictWriter(output_file, report[0].keys())
+            dict_writer.writeheader()
+            dict_writer.writerows(report)
 
     def media_items_to_categories(self):
 
@@ -1094,7 +892,7 @@ class PackNukeScript:
                 return False, tokens
 
         self.categories = self.settings.get('categories')
-        default_category = get_default_category()
+        default_category = self.get_default_category()
         if not self.categories:
             # no categories defined, take default
             self.categories = default_category
@@ -1632,14 +1430,14 @@ class PackNukeScript:
             def __missing__(self, key):
                 return key
 
-        nuke_script_full = nuke.root().name().replace('\\', '/')
-        nuke_script = nuke_script_full.split('/')[-1]
-        self.anatomy['script_name'] = nuke_script[:-3]
+
+        pprint.pprint(self.anatomy)
 
         nuke_source = self.settings['nuke_scripts']['source']['path'].format_map(
             Default(self.anatomy)).replace("\\", "/")
+        log.info(f"Copying Nuke script from:\n{self.anatomy['script_path']}\nto:\n{nuke_source}")
         os.makedirs(os.path.dirname(nuke_source), exist_ok=True)
-        shutil.copy2(nuke_script_full, nuke_source)
+        shutil.copy2(self.anatomy['script_path'], nuke_source)
 
         # PACKAGE
         nuke_package = self.settings['nuke_scripts']['package']['path'].format_map(
@@ -1668,63 +1466,45 @@ class PackNukeScript:
 
         nuke_target_relative = self.settings['nuke_scripts']['target']['relative']
 
-        """
-        nuke.scriptOpen(nuke_package)
-        for item in self.media_items:
-            node = nuke.toNode(item['node_name'])
-            print(item['node_name'])
-        """
-
     def prepare_script(self):
 
+        log.info("Read Comp Data started.")
         self.read_comp_data()
 
         # find duplicities
+        log.info("Find duplicities.")
         self.find_media_duplicities()
         self.find_font_duplicities()
         self.find_gizmo_duplicities()
 
         # filter categories
+        log.info("Filter categories")
         self.media_items_to_categories()
 
         # generate target paths and relink paths
+        log.info("Generate paths")
         self.media_items_to_paths()
         self.font_items_to_paths()
         self.gizmo_items_to_paths()
         self.ocio_to_paths()
 
-        # generate report
-        self.make_report()
-        #pprint.pprint(self.report)
-
-        #print("\n\nPLUGS:\n")
-        #pprint.pprint(self.loaded_plugins)
-
-        #pprint.pprint(self.gizmo_items)
-        #pprint.pprint(self.media_items)
-
     def process_script(self):
 
-        # prepare copy list
+        log.info("Copy media")
         self.copy_media()
-
-        # copy fonts
+        log.info("Copy fonts")
         self.copy_fonts()
-
-        # copy gizmos
+        log.info("Copy gizmos")
         self.copy_gizmos()
-
         if self.settings['gizmos']['to_groups']:
-            pass
-            #self.gizmos_to_groups()
-
-        # copy ocio
+            log.info("Gizmos to groups")
+            self.gizmos_to_groups()
+        log.info("Copy OCIO")
         self.copy_ocio()
-
-        # Make Nuke scripts
+        log.info("Make Nuke scripts")
         self.make_nuke_scripts()
-
-        # save report (end) m
+        log.info("Make Report")
+        self.make_report()
 
 
 if __name__ == "__main__":
@@ -1733,25 +1513,55 @@ if __name__ == "__main__":
     log.setLevel(logging.DEBUG)
     log.info('Started at: ' + time.strftime("%Y-%m-%d, %H:%M"))
 
-    # get user info
-    # anatomies is list of anatomy dicts, that contain workfile path
-    # job destination is a parent folder of the package job
-    # settings is a dict containing user picked packing settings
+    # row id is the last argument, used to identify the corresponding csv row
+    row_id = nuke.rawArgs[-1]
 
+    # settings json file is required
+    settings_dict = {}
+    settings_file = nuke.rawArgs[-2]
+    if not os.path.exists(settings_file):
+        log.error(f"Settings file {settings_file} not found.")
+    with open(settings_file) as _file:
+        settings_dict = json.load(_file)
 
-    anatomies, job_destination, settings = action_dialog()
-    if anatomies and len(anatomies) > 0:
-        # pprint.pprint(anatomies)
-        # print("\n\n\n")
-        # process each nuke script
-        for anatomy in anatomies:
-            one_nuke = PackNukeScript(anatomy, job_destination, settings)
-            one_nuke.prepare_script()
-            one_nuke.process_script()
+    nuke_file = nuke.rawArgs[-3]
 
-    #TODO
-    # gui
-    # save report
-    # logfile
+    # Read the csv file, and identify the row corresponding to the id in arguments
+    scripts_csv = os.path.dirname(settings_file) + '/nuke_files.csv'
+    if not os.path.exists(scripts_csv):
+        log.error(f"Csv file {scripts_csv} not found.")
+    one_row = {}
+    with open(scripts_csv) as csv_file:
+        reader = csv.DictReader(csv_file)
+        for row in reader:
+            one_row = dict(row)
+            one_id = one_row.get('Id')
+            if one_id == row_id:
+                break
+    if one_row == {}:
+        log.error(f"Csv file {scripts_csv} doesn't contain row id {row_id}.")
+
+    # Get anatomy, stored in one csv columns as key value pairs separated by semicolon
+    # The key and value is separated by ": "
+    anatomy = {}
+    tokens = one_row.get('Tokens')
+    if tokens is None or len(tokens) == 0:
+        log.error(f"Csv file {scripts_csv} doesn't contain tokens.")
+    token_list = tokens.split(';')
+    if token_list is None or len(token_list) == 0:
+        log.error(f"Csv file {scripts_csv} doesn't contain tokens.")
+    for token in token_list:
+        _s = token.split(':')
+        if len(_s) == 2:
+            anatomy[_s[0]] = _s[1]
+    pprint.pprint(anatomy)
+
+    if anatomy != {} and settings_dict != {}:
+        pack = PackNukeScript(nuke_file, anatomy, settings_dict, row_id, one_row.get('Source'), one_row.get('Target'))
+        pack.prepare_script()
+        pack.process_script()
+    else:
+        log.error(f"Error packing {row_id}.")
+
 
 

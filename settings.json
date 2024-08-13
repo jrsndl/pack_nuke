@@ -7,12 +7,12 @@
     "nuke_scripts": {
         "source": {
             "copy": true,
-            "path": "{job}/{folder[name]}/{script_name}_source.nk"
+            "path": "{job}/{SHOT}/{script_name}_source.nk"
         },
         "package": {
             "copy": true,
-            "path": "{job}/{folder[name]}/{script_name}_check.nk",
-            "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_check.nk",
+            "path": "{job}/{SHOT}/{script_name}_check.nk",
+            "path_relink": "/vendor1_relink_root/{SHOT}/nuke/{script_name}_check.nk",
             "relative": true,
             "relative_custom_project": false,
             "relative_custom_project_template": "{job}",
@@ -20,8 +20,8 @@
         },
         "target": {
             "copy": true,
-            "path": "{job}/{folder[name]}/{script_name}_target.nk",
-            "path_relink": "/vendor1_relink_root/{folder[name]}/nuke/{script_name}_target.nk",
+            "path": "{job}/{SHOT}/{script_name}_target.nk",
+            "path_relink": "/vendor1_relink_root/{SHOT}/nuke/{script_name}_target.nk",
             "relative": true,
             "relative_custom_project": false,
             "relative_custom_project_template": "{job}",
@@ -156,8 +156,8 @@
     "categories": {
         "test_category": {
             "path": {
-                "root_template": "{job}/{folder[name]}/{category}",
-                "root_template_relink": "{job}/{folder[name]}/{category}",
+                "root_template": "{job}/{SHOT}/{category}",
+                "root_template_relink": "{job}/{SHOT}/{category}",
                 "top_folder": "{clean_name}_{node}",
                 "top_folder_relink": "{clean_name}_{node}"
             },
@@ -218,5 +218,27 @@
         "top_folder_relink": "",
         "subfolders": true,
         "relative": true
+    },
+    "nuke": {
+        "Windows": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe",
+        "Linux": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe",
+        "Darwin": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe"
+    },
+    "deadline": {
+        "Windows": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe",
+        "Linux": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe",
+        "Darwin": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe"
+    },
+    "deadline_python": {
+        "Windows": "e:/_GFX_library/pack_nuke/pack_nuke.py",
+        "Linux": "e:/_GFX_library/pack_nuke/pack_nuke.py",
+        "Darwin": "e:/_GFX_library/pack_nuke/pack_nuke.py"
+    },
+    "deadline_job": {
+        "pool": "all",
+        "group": "nuke",
+        "priority": 50,
+        "department": "io",
+        "LimitGroups": "nuke"
     }
 }

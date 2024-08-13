@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import subprocess
@@ -677,9 +678,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
                         try:
                             # if user made a group
                             version = m.group(1)
+
+                            # get merged anatomy and script_path_tags pairs
                             tokens = self.get_script_path_tags(one_path + '/' + one_file)
                             t = ''
                             for k, v in tokens.items():
+                                t += f"{k}:{v};"
+                            for k, v in self.anatomy.items():
                                 t += f"{k}:{v};"
 
                             my_dict = {
@@ -906,6 +911,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
     def apply(self, nuke_file):
         pass
 
+    def external_execute(self, args):
+
+        kwargs = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+        }
+        if platform.system().lower() == "windows":
+            kwargs["creationflags"] = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP
+                    | getattr(subprocess, "DETACHED_PROCESS", 0)
+                    | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            )
+        popen = subprocess.Popen(args, **kwargs)
+        popen_stdout, popen_stderr = popen.communicate()
+        if popen_stdout:
+            pass
+        if popen_stderr:
+            pass
+
     def go(self):
         def make_dir(dir):
             try:
@@ -917,6 +941,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
         _job_path = self.ui.job_folder.displayText() + '/' + self.ui.job_name.displayText()
         self.settings_json['job']['path'] = _job_path
         self.settings_json['job']['name'] = self.ui.job_name.displayText()
+        self.settings_json['job']['timestamp'] = self.anatomy['timestamp']
 
         r = make_dir(_job_path)
         if not r:
@@ -925,15 +950,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
         r = make_dir(pack_dir)
         if not r:
             logging.error(f"Can't create directory {pack_dir}")
+
+        # Write CSV file with all Nuke scripts
         _csv = pack_dir + '/nuke_files.csv'
-        titles = ['Name', 'Full Path', 'Tokens', 'Package', 'Source', 'Target']
+        titles = ['Id', 'Name', 'Full Path', 'Tokens', 'Package', 'Source', 'Target']
         total = 0
+        selected_versions = []
         with open(_csv, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(titles)
             for one in self.filtered_versions:
                 if one['apply']:
+                    id = str(total).zfill(4) + '_' + one['file'].rstrip('.nk')
                     one_row = [
+                        id,
                         one['file'],
                         one['full'],
                         one['tokens'],
@@ -942,11 +972,53 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
                         self.ui.place_target.currentText(),
                     ]
                     writer.writerow(one_row)
+                    selected_versions.append(one_row)
                     total += 1
 
         _set = pack_dir + '/settings.json'
         with open(_set, 'w') as json_file:
             json.dump(self.settings_json, json_file)
+
+        # now send selected versions to deadline
+        nuke_exe = self.settings_json['nuke'].get(platform.system())
+        if nuke_exe is None or not os.path.exists(nuke_exe):
+            logging.error(f"Can't find Nuke executable: {nuke_exe}")
+        deadline_exe = self.settings_json['deadline'].get(platform.system())
+        if deadline_exe is None or not os.path.exists(deadline_exe):
+            logging.error(f"Can't find Deadline executable: {deadline_exe}")
+        deadline_py = self.settings_json['deadline_python'].get(platform.system())
+        if deadline_py is None or not os.path.exists(deadline_py):
+            logging.error(f"Can't find Deadline python file: {deadline_py}")
+        _params = self.settings_json['deadline_job']
+
+        params_1 = [
+            deadline_exe,
+            '-SubmitCommandLineJob',
+            '-executable',
+            nuke_exe,
+            '-pool',
+            _params['pool'],
+            '-group',
+            _params['group'],
+            '-priority',
+            str(_params['priority']),
+            '-department',
+            _params['department'],
+            '-prop',
+            f"LimitGroups={_params['LimitGroups']}"
+        ]
+        for one in selected_versions:
+            params_2 = [
+                '-name',
+                one[0],  # id
+                '-arguments',
+                '-t',
+                deadline_py,
+                one[2],  # full nuke path - this will be processed by deadline path mapping
+                self.settings_json['job']['path'] + '/_pack_nuke/settings.json',  # path to settings.json,
+                one[0]  # id
+            ]
+            self.external_execute(params_1 + params_2)
 
     def user_stop(self):
         QApplication.processEvents()
