@@ -11,12 +11,21 @@ When finished, each Deadline packing job generates report in the packing folder.
 * multi-shot deduplication for each package (for now, if media is used in 10 Nuke scripts, it is copied 10 times).
 * ingest script that compares current Nuke script (let's say v10 from Vendor) with old script (maybe v0 from studio), copies v10 to the same folder as v0, and relinks media already present in v0 to v10 script (by comparing file extension, number of files in the file sequence, and hashes)
 * option to skip packing files that "the other place" already has
-* code cleanup
+* code cleanup, can be simplified a lot...
+* the gui is very rough, needs a lot of attention
+* Ayon integration, that will replace the gui part
+
+## Pack Nuke
+Python script to be run in Nuke. It opens Nuke script, gathers all the files info, deduplicates the files, copies files to package folder, saves Nuke script to package, and relinks to copied files.
+
+Saves the report in package folder as well.
+![gui_05.png](gui_05.png)
 
 ## Pack Nuke Gui
 Helps to select the Nuke scripts to be packed. It recursively searches for Nuke scripts with basic filtering.
 Version regex parses version from the found *.nk path. You can further filter to only include first x and / or last n number of versions.
 Found and filtered Nuke scripts are displayed in the spreadsheet for user select.
+
 ![gui_01.png](gui_01.png)
 
 Job Folder together with Job Name construct the destination path.
@@ -24,8 +33,8 @@ Job Folder together with Job Name construct the destination path.
 Send to Deadline button saves the list of selected nuke scripts as .csv, and settings json from the Settings tab to the job folder, and sends each selected Nuke script to Deadline for processing.
 
 ### Settings
-![gui_02.png](gui_02.png)
 
+![gui_02.png](gui_02.png)
 
 #### Settings - Places
 Each place can be a source and / or target of the package.
@@ -65,7 +74,9 @@ Controls Nuke script names and relative linking.
 
 ## Package Folder Structure
 Package has always the _pack_nuke folder, that contains selected nuke scripts in nuke_files.csv, package settings.json, and report from each pack_nuke deadline job.
+
 ![gui_03.png](gui_03.png)
 
 The rest of the folder structure is defined by the path section of categories.
+
 ![gui_04.png](gui_04.png)
