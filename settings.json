@@ -1,15 +1,19 @@
 {
     "job": {
+        "_comment": "Package folder configuration. Needs source and target place set. Source place anatomy and tags are used. Special timestamp tag for UTC time",
         "job_name_default": "PackNuke_{place_source}2{place_target}_{timestamp}",
         "job_name_check": "^PackNuke_(.+)2(.+)_(\\d{6}_\\d{4})_([-]?\\d{4})[_]?(?:.*)$",
-        "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}"
+        "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}",
+        "_comment2": "path, name and timestamp keys will be added here before saving the json to the package"
     },
     "nuke_scripts": {
         "source": {
+            "_comment": "Copies the source Nuke script to the package",
             "copy": true,
             "path": "{job}/{SHOT}/{script_name}_source.nk"
         },
         "package": {
+            "_comment": "Nuke script to be included in the package, with copied files relinked.",
             "copy": true,
             "path": "{job}/{SHOT}/{script_name}_check.nk",
             "path_relink": "/vendor1_relink_root/{SHOT}/nuke/{script_name}_check.nk",
@@ -19,6 +23,7 @@
             "relative_above_script": 1
         },
         "target": {
+            "_comment": "Same as package, should be removed.",
             "copy": true,
             "path": "{job}/{SHOT}/{script_name}_target.nk",
             "path_relink": "/vendor1_relink_root/{SHOT}/nuke/{script_name}_target.nk",
@@ -29,12 +34,15 @@
         }
     },
     "hashes": {
+        "_comment": "Every discovered file will be hashed for later identification.",
         "hashes_generate": true
     },
     "places": {
         "studio": {
+            "_comment": "Each place can have tags from anatomy (settings.json), and optionally parsed from the path.",
             "is_source": false,
             "is_target": false,
+            "_comment2": "is_source and is_target will be set grom the gui here before saving the json to the package",
             "anatomy": {
                 "studio": {
                     "name": "Dazzle",
@@ -156,18 +164,21 @@
     "categories": {
         "test_category": {
             "path": {
+                "_comment": "Root and top folder construct the package location of the file. The file name is not renamed, so care must be taken to make sure the path is unique.",
                 "root_template": "{job}/{SHOT}/{category}",
                 "root_template_relink": "{job}/{SHOT}/{category}",
                 "top_folder": "{clean_name}_{node}",
                 "top_folder_relink": "{clean_name}_{node}"
             },
             "filter_options": {
+                "_comment": "Allows to skip nodes that are not connected to any other node (often old renders) and disabled nodes. Combine can be AND or OR",
                 "skip_disconnected": true,
                 "skip_disabled": true,
                 "combine_filters": "OR"
             },
             "filters": [
                 {
+                    "_comment": "Source: File Name|Full Path|Node Class. If check list is not empty, filter is true only if search group result matches one of the list item. Token name allows to add token, value is earch group result.",
                     "source": "File Name",
                     "search": ".*\\.(\\w{2,4})$",
                     "check": ["exr", "jpg", "jpeg", "mov"],
@@ -192,6 +203,7 @@
         }
     },
     "fonts": {
+        "_comment": "Font category",
         "enabled": true,
         "root_template": "{job}/_shared",
         "root_template_relink": "/vendor1_relink_root/_shared",
@@ -201,6 +213,7 @@
         "skip_disabled": true
     },
     "gizmos": {
+        "_comment": "Gizmos category. Option to convert gizmos to groups still copies the gizmos.",
         "enabled": true,
         "to_groups": true,
         "root_template": "{job}/_shared",
@@ -211,6 +224,7 @@
         "skip_disabled": true
     },
     "ocio": {
+        "_comment": "OCIO category. Optionally copies all files found under the config parent folder.",
         "enabled": true,
         "root_template": "{job}/_shared/ocio",
         "root_template_relink": "/vendor1_relink_root/_shared/ocio",
@@ -220,21 +234,25 @@
         "relative": true
     },
     "nuke": {
+        "_comment": "OS specific path to Nuke executable to be used for Deadline processing.",
         "Windows": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe",
         "Linux": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe",
         "Darwin": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe"
     },
     "deadline": {
+        "_comment": "OS specific path to Deadline command executable to be used for sending job to farm.",
         "Windows": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe",
         "Linux": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe",
         "Darwin": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe"
     },
     "deadline_python": {
+        "_comment": "OS specific path to Python script to be used for sending job to farm.",
         "Windows": "e:/_GFX_library/pack_nuke/pack_nuke.py",
         "Linux": "e:/_GFX_library/pack_nuke/pack_nuke.py",
         "Darwin": "e:/_GFX_library/pack_nuke/pack_nuke.py"
     },
     "deadline_job": {
+        "_comment": "Controls the machines that will accept the pack nuke tasks.",
         "pool": "all",
         "group": "nuke",
         "priority": 50,

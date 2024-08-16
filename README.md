@@ -15,7 +15,7 @@ When finished, each Deadline packing job generates report in the packing folder.
 * the gui is very rough, needs a lot of attention
 * Ayon integration, that will replace the gui part
 
-## Pack Nuke
+## Pack Nuke Script
 Python script to be run in Nuke. It opens Nuke script, gathers all the files info, deduplicates the files, copies files to package folder, saves Nuke script to package, and relinks to copied files.
 
 Saves the report in package folder as well.
@@ -80,3 +80,8 @@ Package has always the _pack_nuke folder, that contains selected nuke scripts in
 The rest of the folder structure is defined by the path section of categories.
 
 ![gui_04.png](gui_04.png)
+
+## Setup
+The settings.json is quite complex, please refer to the settings.json _comment keys for further info.
+
+Many sections have path and path_relink keys. The path is used to copy from source to package. The _relink path can be used for ingesting at the target place. This might change...
