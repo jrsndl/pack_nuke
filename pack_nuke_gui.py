@@ -845,8 +845,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
             Returns dict with following keys:
                 'path': folder_path,
                 'file': file_name,
-                'full': f"{folder_path}/{file_name}",
-                'version': version number
+                'version': version as as string, might be with leading zeroes,
+                'full': {folder_path}/{file_name}",
                 'apply': bool value user-selecting the version in the gui
                 'tokens': tokens parsed from the path
             """
@@ -1088,7 +1088,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_pack_gui):
                 '-priority', str(self.settings_json['deadline_job']['priority']),
                 '-department', self.settings_json['deadline_job']['department'],
                 '-prop', f"LimitGroups={self.settings_json['deadline_job']['LimitGroups']}",
-                f"outputDir={job_path}"
+                "-prop", f"OutputDirectory0={job_path}"
             ]
             json_settings_path = os.path.join(job_path, 'settings.json').replace('\\', '/')
 

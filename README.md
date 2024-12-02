@@ -19,14 +19,14 @@ When finished, each Deadline packing job generates report in the packing folder.
 Python script to be run in Nuke. It opens Nuke script, gathers all the files info, deduplicates the files, copies files to package folder, saves Nuke script to package, and relinks to copied files.
 
 Saves the report in package folder as well.
-![gui_05.png](gui_05.png)
+![gui_05.png](doc/gui_05.png)
 
 ## Pack Nuke Gui
 Helps to select the Nuke scripts to be packed. It recursively searches for Nuke scripts with basic filtering.
 Version regex parses version from the found *.nk path. You can further filter to only include first x and / or last n number of versions.
 Found and filtered Nuke scripts are displayed in the spreadsheet for user select.
 
-![gui_01.png](gui_01.png)
+![gui_01.png](doc/gui_01.png)
 
 Job Folder together with Job Name construct the destination path.
 
@@ -34,7 +34,7 @@ Send to Deadline button saves the list of selected nuke scripts as .csv, and set
 
 ### Settings
 
-![gui_02.png](gui_02.png)
+![gui_02.png](doc/gui_02.png)
 
 #### Settings - Places
 Each place can be a source and / or target of the package.
@@ -75,11 +75,11 @@ Controls Nuke script names and relative linking.
 ## Package Folder Structure
 Package has always the _pack_nuke folder, that contains selected nuke scripts in nuke_files.csv, package settings.json, and report from each pack_nuke deadline job.
 
-![gui_03.png](gui_03.png)
+![gui_03.png](doc/gui_03.png)
 
 The rest of the folder structure is defined by the path section of categories.
 
-![gui_04.png](gui_04.png)
+![gui_04.png](doc/gui_04.png)
 
 ## Setup
 The settings.json is quite complex, please refer to the settings.json _comment keys for further info.

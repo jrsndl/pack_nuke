@@ -10,6 +10,7 @@ import pprint
 import re
 import shutil
 import subprocess
+import sys
 import time
 import timeit
 
@@ -81,8 +82,7 @@ class PackNukeScript:
         return default_category
 
     def file_sequence_to_glob(self, path):
-        """
-        Helper function to convert a full path with printf or hash file sequence notation to glob filter
+        """Helper function to convert a full path with printf or hash file sequence notation to glob filter
         foo\bar%04d.exr -> foo/bar.????.exr
         foo\bar###.exr -> foo/bar.???.exr
         foo/bar -> foo/bar
@@ -105,25 +105,27 @@ class PackNukeScript:
                 pass
         return path
 
-    def bytes_to_string(self, size_bytes):
+    def bytes_to_string(self, size_bytes) -> str:
+        """Make human-readable file size
+        """
         size_bytes = float(size_bytes)
-        KB = float(1024)
-        MB = float(KB ** 2)  # 1.048.576
-        GB = float(KB ** 3)  # 1.073.741.824
-        TB = float(KB ** 4)  # 1.099.511.627.776
+        kb = float(1024)
+        mb = float(kb ** 2)  # 1.048.576
+        gb = float(kb ** 3)  # 1.073.741.824
+        tb = float(kb ** 4)  # 1.099.511.627.776
 
-        if size_bytes < KB:
+        if size_bytes < kb:
             return '{0} {1}'.format(size_bytes, 'B')
-        elif KB <= size_bytes < MB:
-            return '{0:.2f} KB'.format(size_bytes / KB)
-        elif MB <= size_bytes < GB:
-            return '{0:.2f} MB'.format(size_bytes / MB)
-        elif GB <= size_bytes < TB:
-            return '{0:.2f} GB'.format(size_bytes / GB)
-        elif TB <= size_bytes:
-            return '{0:.2f} TB'.format(size_bytes / TB)
+        elif kb <= size_bytes < mb:
+            return '{0:.2f} KB'.format(size_bytes / kb)
+        elif mb <= size_bytes < gb:
+            return '{0:.2f} MB'.format(size_bytes / mb)
+        elif gb <= size_bytes < tb:
+            return '{0:.2f} GB'.format(size_bytes / gb)
+        elif tb <= size_bytes:
+            return '{0:.2f} TB'.format(size_bytes / tb)
 
-    def eval_tcl(self, text):
+    def eval_tcl(self, text) -> str:
         val = ''
         try:
             val = nuke.tcl("[return \"" + text + "\"]")
@@ -1508,56 +1510,115 @@ class PackNukeScript:
 
 
 if __name__ == "__main__":
+    """
+    This script is ment to be run on Deadline render farm.
+    pack_nuke_gui exports:
+        - .json settings file to be used for the job
+        - .csv file that contains one or more Nuke scripts to be packed
+        the csv file is assumed to be in the same folder as json settings, with name nuke_files.csv
+        columns: ['Id', 'Name', 'Version', 'Full Path', 'Tokens', 'Package', 'Source', 'Target']
+
+    pack_nuke_gui submits to Deadline:
+        - each Nuke script to be packed as a separate task,
+        running this python script via Nuke -t argument 
+    
+    arguments:
+        this_script: path to this script
+        nuke_script: path to .nk Nuke file
+        settings: path to .json settings file
+        row_id: the id of the render job, used to identify the line in csv file
+    """
+
+
+    def load_settings(settings_file_path):
+        empty_settings = {}
+        if not os.path.exists(settings_file_path):
+            log.critical(f"Settings file {settings_file_path} not found.")
+            return empty_settings
+
+        try:
+            with open(settings_file_path) as file:
+                return json.load(file)
+        except FileNotFoundError as e:
+            log.critical(f"File not found: {e}")
+            return empty_settings
+        except json.JSONDecodeError as e:
+            log.critical(f"Error decoding JSON: {e}")
+            return empty_settings
+        except Exception as e:
+            log.critical(f"Unexpected error: {e} while reading settings file {settings_file_path}")
+            return empty_settings
+
+
+    def read_csv_row_by_id(csv_path, search_id):
+        """Read the CSV file and find the row corresponding to the given ID."""
+        try:
+            if not os.path.exists(csv_path):
+                log.critical(f"CSV file {csv_path} not found.")
+                return None
+
+            with open(csv_path, mode='r', newline='') as csv_file:
+                try:
+                    reader = csv.DictReader(csv_file)
+                    for row in reader:
+                        if row.get('Id') == search_id:
+                            return dict(row)
+                except csv.Error as e:
+                    log.critical(f"Error reading CSV file {csv_path}: {e}")
+                    return None
+
+        except OSError as e:
+            log.critical(f"Error accessing file {csv_path}: {e}")
+            return None
+
+        log.critical(f"CSV file {csv_path} doesn't contain row id {search_id}.")
+        return None
+
+    def get_anatomy(csv_row):
+        anatomy = {}
+        tokens = csv_row.get('Tokens')
+        if tokens is None or len(tokens) == 0:
+            log.error(f"Csv file {scripts_csv} doesn't contain tokens.")
+        token_list = tokens.split(';')
+        if token_list is None or len(token_list) == 0:
+            log.error(f"Csv file {scripts_csv} doesn't contain tokens.")
+        for token in token_list:
+            _s = token.split(':')
+            if len(_s) == 2:
+                anatomy[_s[0]] = _s[1]
+        return anatomy
+
     # log
     log = logging.getLogger("mylog")
     log.setLevel(logging.DEBUG)
     log.info('Started at: ' + time.strftime("%Y-%m-%d, %H:%M"))
 
-    # row id is the last argument, used to identify the corresponding csv row
+    # arguments
+    nuke_file = nuke.rawArgs[-3]
+    settings_file = nuke.rawArgs[-2]
     row_id = nuke.rawArgs[-1]
 
-    # settings json file is required
-    settings_dict = {}
-    settings_file = nuke.rawArgs[-2]
-    if not os.path.exists(settings_file):
-        log.error(f"Settings file {settings_file} not found.")
-    with open(settings_file) as _file:
-        settings_dict = json.load(_file)
-
-    nuke_file = nuke.rawArgs[-3]
+    # settings json file
+    settings_dict = load_settings(settings_file)
+    if settings_dict == {}:
+        log.critical("Settings file is empty.")
+        sys.exit("Failed to read settings file.")
 
     # Read the csv file, and identify the row corresponding to the id in arguments
     scripts_csv = os.path.dirname(settings_file) + '/nuke_files.csv'
-    if not os.path.exists(scripts_csv):
-        log.error(f"Csv file {scripts_csv} not found.")
-    one_row = {}
-    with open(scripts_csv) as csv_file:
-        reader = csv.DictReader(csv_file)
-        for row in reader:
-            one_row = dict(row)
-            one_id = one_row.get('Id')
-            if one_id == row_id:
-                break
-    if one_row == {}:
-        log.error(f"Csv file {scripts_csv} doesn't contain row id {row_id}.")
 
-    # Get anatomy, stored in one csv columns as key value pairs separated by semicolon
-    # The key and value is separated by ": "
-    anatomy = {}
-    tokens = one_row.get('Tokens')
-    if tokens is None or len(tokens) == 0:
-        log.error(f"Csv file {scripts_csv} doesn't contain tokens.")
-    token_list = tokens.split(';')
-    if token_list is None or len(token_list) == 0:
-        log.error(f"Csv file {scripts_csv} doesn't contain tokens.")
-    for token in token_list:
-        _s = token.split(':')
-        if len(_s) == 2:
-            anatomy[_s[0]] = _s[1]
-    pprint.pprint(anatomy)
+    csv_row = read_csv_row_by_id(csv_path=scripts_csv, search_id=row_id)
+    if csv_row is None:
+        sys.exit(f"No row {row_id} found in {scripts_csv}.")
+
+    # Get anatomy, stored in one csv Tokens column as key value pairs separated by semicolon
+    anatomy = get_anatomy(csv_row)
+    if anatomy == {}:
+        log.critical("Anatomy tags not found in Tokens csv column.")
+        sys.exit("Failed to read anatomy.")
 
     if anatomy != {} and settings_dict != {}:
-        pack = PackNukeScript(nuke_file, anatomy, settings_dict, row_id, one_row.get('Source'), one_row.get('Target'))
+        pack = PackNukeScript(nuke_file, anatomy, settings_dict, row_id, csv_row.get('Source'), csv_row.get('Target'))
         pack.prepare_script()
         pack.process_script()
     else:
