@@ -45,12 +45,12 @@
             "_comment2": "is_source and is_target will be set grom the gui here before saving the json to the package",
             "anatomy": {
                 "studio": {
-                    "name": "Dazzle",
-                    "code": "dzl"
+                    "name": "BlindCat",
+                    "code": "bc"
                 },
                 "project": {
-                    "name": "T029_OP3_16_3_tst",
-                    "code": "t029"
+                    "name": "BCV_054_HAR",
+                    "code": "bcv054"
                 },
                 "root": {
                     "work": "z:"
@@ -61,9 +61,9 @@
                 {
                     "name": "SHOT",
                     "source": "File Name",
-                    "search": "^(\\w{8}).*$",
+                    "search": "^([^_]*_[^_]*_[^_]*_[^_]*)_([^_]*)(.*)$",
                     "replace": "\\1",
-                    "lowercase": true,
+                    "lowercase": false,
                     "uppercase": false
                 },
                 {
@@ -71,7 +71,7 @@
                     "source": "File Name",
                     "search": "^(sq\\d{2-4}).*$",
                     "replace": "\\1",
-                    "lowercase": true,
+                    "lowercase": false,
                     "uppercase": false
                 },
                 {
@@ -79,7 +79,7 @@
                     "source": "File Name",
                     "search": "^.*_([^_]+)_v\\d{2,4}.*$",
                     "replace": "\\1",
-                    "lowercase": true,
+                    "lowercase": false,
                     "uppercase": false
                 },
                 {
@@ -95,7 +95,7 @@
                     "source": "File Name",
                     "search": ".*",
                     "replace": "101",
-                    "lowercase": true,
+                    "lowercase": false,
                     "uppercase": false
                 }
             ]
@@ -109,8 +109,8 @@
                     "code": "vdr1"
                 },
                 "project": {
-                    "name": "T027_cgTests_Sept23",
-                    "code": "dp1234_prj"
+                    "name": "BCV_054_HAR",
+                    "code": "bcv054"
                 },
                 "root": {
                     "work": "z:"
@@ -121,9 +121,9 @@
                 {
                     "name": "SHOT",
                     "source": "File Name",
-                    "search": "^(\\w{8}).*$",
+                    "search": "^([^_]*_[^_]*_[^_]*_[^_]*)_([^_]*)(.*)$",
                     "replace": "/1",
-                    "lowercase": true,
+                    "lowercase": false,
                     "uppercase": false
                 },
                 {
@@ -181,7 +181,7 @@
                     "_comment": "Source: File Name|Full Path|Node Class. If check list is not empty, filter is true only if search group result matches one of the list item. Token name allows to add token, value is earch group result.",
                     "source": "File Name",
                     "search": ".*\\.(\\w{2,4})$",
-                    "check": ["exr", "jpg", "jpeg", "mov"],
+                    "check": ["exr", "jpg", "jpeg", "mov", "mp4", "png"],
                     "token_name": "extension",
                     "invert": false
                 },
@@ -235,9 +235,9 @@
     },
     "nuke": {
         "_comment": "OS specific path to Nuke executable to be used for Deadline processing.",
-        "Windows": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe",
-        "Linux": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe",
-        "Darwin": "C:/Program Files/Nuke14.0v6/Nuke14.0.exe"
+        "Windows": "C:/Program Files/Nuke15.2v4/Nuke15.2.exe",
+        "Linux": "C:/Program Files/Nuke15.2v4/Nuke15.2",
+        "Darwin": "C:/Program Files/Nuke15.2v4/Nuke15.2"
     },
     "deadline": {
         "_comment": "OS specific path to Deadline command executable to be used for sending job to farm.",
@@ -247,15 +247,15 @@
     },
     "deadline_python": {
         "_comment": "OS specific path to Python script to be used for sending job to farm.",
-        "Windows": "e:/_GFX_library/pack_nuke/pack_nuke.py",
-        "Linux": "e:/_GFX_library/pack_nuke/pack_nuke.py",
-        "Darwin": "e:/_GFX_library/pack_nuke/pack_nuke.py"
+        "Windows": "c:/_GFX_library/pack_nuke/pack_nuke.py",
+        "Linux": "c:/_GFX_library/pack_nuke/pack_nuke.py",
+        "Darwin": "c:/_GFX_library/pack_nuke/pack_nuke.py"
     },
     "deadline_job": {
         "_comment": "Controls the machines that will accept the pack nuke tasks.",
         "pool": "all",
-        "group": "nuke",
-        "priority": 50,
+        "group": "all",
+        "priority": 40,
         "department": "io",
         "LimitGroups": "nuke"
     }

@@ -1193,8 +1193,12 @@ class PackNukeScript:
     def copy_file(self, source, target):
 
         # print("Copying file {} to {}".format(source, target))
-        shutil.copy2(source, target)
-        return 0
+        #shutil.copy2(source, target)
+        try:
+            shutil.copy2(r"\\?\{}".format(source), r"\\?\{}".format(target))
+            return 0
+        except Exception:
+            return 1
 
     def copy_media(self):
         start = timeit.timeit()
