@@ -1,8 +1,8 @@
 {
     "job": {
         "_comment": "Package folder configuration. Needs source and target place set. Source place anatomy and tags are used. Special timestamp tag for UTC time",
-        "job_name_default": "PackNuke_{place_source}2{place_target}_{timestamp}",
-        "job_name_check": "^PackNuke_(.+)2(.+)_(\\d{6}_\\d{4})_([-]?\\d{4})[_]?(?:.*)$",
+        "job_name_default": "{place_source}2{place_target}_{timestamp}",
+        "job_name_check": "^(.+)2(.+)_(\\d{6}_\\d{4})_([-]?\\d{4})[_]?(?:.*)$",
         "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}",
         "_comment2": "path, name and timestamp keys will be added here before saving the json to the package"
     },
@@ -35,10 +35,10 @@
     },
     "hashes": {
         "_comment": "Every discovered file will be hashed for later identification.",
-        "hashes_generate": true
+        "hashes_generate": false
     },
     "places": {
-        "studio": {
+        "bc": {
             "_comment": "Each place can have tags from anatomy (settings.json), and optionally parsed from the path.",
             "is_source": false,
             "is_target": false,
@@ -100,7 +100,7 @@
                 }
             ]
         },
-        "vendor1": {
+        "out": {
             "is_source": false,
             "is_target": false,
             "anatomy": {
@@ -162,13 +162,13 @@
         }
     },
     "categories": {
-        "test_category": {
+        "src": {
             "path": {
                 "_comment": "Root and top folder construct the package location of the file. The file name is not renamed, so care must be taken to make sure the path is unique.",
                 "root_template": "{job}/{SHOT}/{category}",
                 "root_template_relink": "{job}/{SHOT}/{category}",
-                "top_folder": "{clean_name}_{node}",
-                "top_folder_relink": "{clean_name}_{node}"
+                "top_folder": "{node}",
+                "top_folder_relink": "{node}"
             },
             "filter_options": {
                 "_comment": "Allows to skip nodes that are not connected to any other node (often old renders) and disabled nodes. Combine can be AND or OR",
@@ -254,7 +254,7 @@
     "deadline_job": {
         "_comment": "Controls the machines that will accept the pack nuke tasks.",
         "pool": "all",
-        "group": "all",
+        "group": "packnuke",
         "priority": 40,
         "department": "io",
         "LimitGroups": "nuke"
