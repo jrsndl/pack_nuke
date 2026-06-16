@@ -325,7 +325,8 @@ class PackNukeScript:
                         size = os.path.getsize(each_file)
                         total_size += size
                         my_hash = get_file_hash(each_file)
-                        all_hashes += my_hash
+                        if my_hash is not None:
+                            all_hashes += my_hash
                         all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
                     hash_for_all = hashlib.blake2b(all_hashes.encode()).hexdigest()
 
@@ -488,7 +489,8 @@ class PackNukeScript:
                 size = os.path.getsize(each_file)
                 total_size += size
                 my_hash = get_file_hash(each_file)
-                all_hashes += my_hash
+                if my_hash is not None:
+                    all_hashes += my_hash
                 all_files.append({'path': each_file, 'size': size, 'hash': my_hash})
             hash_for_all = hashlib.blake2b(all_hashes.encode()).hexdigest()
 
@@ -1191,13 +1193,13 @@ class PackNukeScript:
         return return_code, output, error
 
     def copy_file(self, source, target):
-
-        # print("Copying file {} to {}".format(source, target))
-        #shutil.copy2(source, target)
+        
         try:
-            shutil.copy2(r"\\?\{}".format(source), r"\\?\{}".format(target))
+            #shutil.copy2(r"\\?\{}".format(source), r"\\?\{}".format(target))
+            shutil.copy2(source, target)
             return 0
         except Exception:
+            print("Copying file {} to {} failed".format(source, target))
             return 1
 
     def copy_media(self):
