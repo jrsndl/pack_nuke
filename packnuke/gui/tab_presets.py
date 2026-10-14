@@ -12,14 +12,13 @@ from typing import Any, Callable, Dict, List
 from PySide6 import QtCore, QtWidgets
 
 from ..core import paths, settings as settings_mod
-from .state import AppState
+from .state import PRESET_KIND, AppState
 from . import help as help_texts
 from .widgets import PathEdit, button, hbox, hint, label, open_path, vbox
 
 log = logging.getLogger('packnuke.gui')
 
 PRESET_EXT = '.json'
-PRESET_KIND = 'packnuke_preset'
 
 
 def preset_file_name(name: str) -> str:
@@ -52,9 +51,6 @@ class PresetsTab(QtWidgets.QWidget):
         self.name = QtWidgets.QLineEdit()
         self.name.setPlaceholderText('preset name')
         self.name.returnPressed.connect(self.save)
-        self.embed = QtWidgets.QCheckBox('Store the full settings.json content in the preset')
-        self.embed.setToolTip('Off: the preset remembers the settings file path only.\n'
-                              'On: the preset carries its own copy of the settings (incl. unsaved edits).')
 
         self.default_place = QtWidgets.QComboBox()
         self.default_place.setEditable(True)
@@ -77,9 +73,9 @@ class PresetsTab(QtWidgets.QWidget):
         save_box = QtWidgets.QGroupBox('Save current state as preset')
         save_box.setLayout(vbox(
             hbox(label('Name:'), self.name, button('Save preset', self.save, object_name='primary')),
-            self.embed,
-            hint('A preset stores: search root, skip folders, depth, filters, version regex, first/last N, '
-                 'source/target place and the settings file.'), margins=6))
+            hint('A preset stores the complete settings (as edited in the GUI, saved or not) plus the search '
+                 'root, skip folders, depth, filters, version regex, first/last N and source/target place. '
+                 'After loading or saving a preset, the Settings tab saves into that preset.'), margins=6))
 
         help_texts.apply([
             (self.folder, 'Presets folder:'), (self.folder.edit, 'Presets folder:'), (self.list, 'Presets'),
@@ -166,11 +162,9 @@ class PresetsTab(QtWidgets.QWidget):
             'kind': PRESET_KIND,
             'name': name,
             'saved': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'settings_file': self.state.settings_path,
             'gui': self.get_gui(),
+            'settings': self.state.settings_copy(),
         }
-        if self.embed.isChecked():
-            data['settings'] = self.state.settings_copy()
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -178,6 +172,9 @@ class PresetsTab(QtWidgets.QWidget):
             log.error('Saving preset %s failed: %s', path, e)
             return
         log.info('Preset "%s" saved to %s', name, path)
+        # the preset is now where the settings live
+        self.state.set_settings(data['settings'], path, dirty=False, source='preset', preset_name=name)
+        self.state.ini.set('last_preset', name)
         self.refresh()
         items = self.list.findItems(name, QtCore.Qt.MatchExactly)
         if items:
@@ -198,23 +195,21 @@ class PresetsTab(QtWidgets.QWidget):
                 self, 'Load preset', 'Settings have unsaved changes. Load the preset anyway?') \
                 != QtWidgets.QMessageBox.Yes:
             return False
-        settings_file = data.get('settings_file') or ''
-        if isinstance(data.get('settings'), dict):
-            on_disk = None
-            if settings_file and os.path.isfile(settings_file):
-                try:
-                    with open(settings_file, 'r', encoding='utf-8') as f:
-                        on_disk = json.load(f)
-                except (OSError, ValueError):
-                    on_disk = None
-            same = isinstance(on_disk, dict) and \
-                settings_mod.complete(on_disk) == settings_mod.complete(data['settings'])
-            self.state.set_settings(data['settings'], settings_file, dirty=not same)
-            log.info('Preset "%s": using embedded settings%s', name,
-                     '' if same else ' (differs from the file on disk - not saved yet)')
-        elif settings_file:
-            if not self.state.load_settings(settings_file):
-                log.error('Preset "%s": settings file could not be loaded: %s', name, settings_file)
+        path = self._path(name)
+        settings = data.get('settings')
+        dirty = False
+        if not isinstance(settings, dict):
+            # preset from an older version: it only referenced a settings file -> embed it now
+            settings_file = data.get('settings_file') or ''
+            try:
+                settings = settings_mod.load_settings(settings_file)
+            except settings_mod.SettingsError as e:
+                log.error('Preset "%s" has no embedded settings and its settings file failed: %s', name, e)
+                return False
+            dirty = True
+            log.warning('Preset "%s" had no embedded settings; took them from %s. Save (Ctrl+S) to embed them.',
+                        name, settings_file)
+        self.state.set_settings(settings, path, dirty=dirty, source='preset', preset_name=name)
         self.set_gui(data.get('gui') or {})
         self.state.ini.set('last_preset', name)
         log.info('Preset "%s" loaded.', name)

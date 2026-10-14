@@ -93,8 +93,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.busy_bar.setVisible(self._busy > 0)
 
     def _update_settings_label(self, *_args) -> None:
-        path = self.state.settings_path or 'no settings file'
-        self.settings_label.setText('{}{}'.format(path, '  (unsaved)' if self.state.dirty else ''))
+        st = self.state
+        if st.settings_source == 'preset':
+            text = 'Preset: {}'.format(st.preset_name)
+        else:
+            text = st.settings_path or 'no settings file'
+        self.settings_label.setText('{}{}'.format(text, '  (unsaved)' if st.dirty else ''))
+        self.settings_label.setToolTip('Settings come from: {}'.format(st.settings_path or '-'))
 
     def _update_queue_title(self) -> None:
         n = len(self.state.queue)
@@ -146,15 +151,17 @@ class MainWindow(QtWidgets.QMainWindow):
         geo = ini.get('geometry', None)
         if isinstance(geo, (QtCore.QByteArray, bytes)):
             self.restoreGeometry(geo)
-        settings_file = ini.get_str('settings_file', '')
-        if settings_file:
-            self.state.load_settings(settings_file)
+        stored = {k: ini.get(k) for k in GUI_KEYS if ini.qs.contains(k)}
+        last_preset = ini.get_str('last_preset', '')
+        if last_preset and last_preset in self.presets.preset_names() and self.presets.load(last_preset):
+            log.info('Restored last preset "%s".', last_preset)
         else:
-            log.warning('No settings file yet - choose one in the Settings tab.')
+            default = self.state.app_dir + '/settings.json'
+            if not self.state.load_settings(default):
+                log.warning('No settings loaded - choose a preset or a settings file.')
+        self.set_gui_state(stored)   # last session's search/filters win over the preset's
         self.settings_tab.reload()
         self.places.reload()
-        stored = {k: ini.get(k) for k in GUI_KEYS if ini.qs.contains(k)}
-        self.set_gui_state(stored)
         self.log_tab.level_combo.setCurrentIndex(ini.get_int('log_level', 1))
         self.tabs.setCurrentIndex(ini.get_int('last_tab', 0))
         self._update_settings_label()
@@ -163,8 +170,6 @@ class MainWindow(QtWidgets.QMainWindow):
         ini = self.state.ini
         for k, v in self.gui_state().items():
             ini.set(k, v)
-        if self.state.settings_path:
-            ini.set('settings_file', self.state.settings_path)
         ini.set('presets_folder', self.presets.folder_path())
         ini.set('log_level', self.log_tab.level_combo.currentIndex())
         ini.set('last_tab', self.tabs.currentIndex())

@@ -58,11 +58,12 @@ class GuiSmoke(unittest.TestCase):
         app_dir = self.tmp + '/app'
         os.makedirs(app_dir)
         QtCore.QSettings._stores.clear()
-        QtCore.QSettings(app_dir + '/settings.ini').setValue('settings_file', self.tmp + '/settings.json')
+        shutil.copy(self.tmp + '/settings.json', app_dir + '/settings.json')   # app root settings
         handler = setup_logging(app_dir)
         win = MainWindow(app_dir, handler)
         st = win.state
-        self.assertEqual(st.settings_path, self.tmp + '/settings.json')
+        self.assertEqual(st.settings_path, app_dir + '/settings.json')
+        self.assertEqual(st.settings_source, 'file')
         self.assertEqual(st.place_names(), ['bc', 'out'])
 
         # ---- Get Nuke Scripts: one scan of *.nk, then instant filters
@@ -162,7 +163,44 @@ class GuiSmoke(unittest.TestCase):
         self.assertEqual(st.settings['copy']['threads'], 12)
         t._platform_edits[('nuke', 'Windows')].setText('C:/Nuke/Nuke.exe')
         self.assertEqual(st.settings['nuke']['Windows'], 'C:/Nuke/Nuke.exe')
-        t.pages.setCurrentIndex(1)
+        # Nuke Scripts page
+        ns = t.nuke_scripts
+        ns.w['package']['path'].user_types('{job}/{SHOT}/pkg_{script_name}.nk')
+        self.assertEqual(st.settings['nuke_scripts']['package']['path'], '{job}/{SHOT}/pkg_{script_name}.nk')
+        self.assertIn('/har_sq01_sh0', ns.w['package']['path:res'].text())
+        ns.w['target']['copy'].setChecked(True)
+        self.assertTrue(st.settings['nuke_scripts']['target']['copy'])
+        ns.w['package']['relative_above_script'].setValue(2)
+        self.assertEqual(st.settings['nuke_scripts']['package']['relative_above_script'], 2)
+        ns.w['source']['path'].user_types('{job}/{NOPE}/x.nk')
+        self.assertIn('missing: NOPE', ns.w['source']['path:res'].text())
+        ns.w['source']['path'].user_types('{job}/{SHOT}/{script_name}_source.nk')
+        # Categories page
+        c = t.categories
+        self.assertEqual(c.current(), 'src')
+        c.test_path.setText('//srv/shots/sh010/plates/v001/plate.%04d.exr')
+        self.assertTrue(c.test_result.text().startswith('Matches'), c.test_result.text())
+        c.fields['top_folder'].user_types('{extension}')
+        self.assertEqual(st.settings['categories']['src']['path']['top_folder'], '{extension}')
+        self.assertIn('/exr/plate.%04d.exr', c.resolved['package'].text())
+        c.test_path.setText('//srv/shots/sh010/plates/notes.txt')
+        c.test_class.setText('Grade')                 # src is OR-combined; Read alone would match
+        self.assertTrue(c.test_result.text().startswith('Does not match'))
+        QtWidgets.QInputDialog.answer = ('mov', True)
+        c.add()
+        self.assertEqual(list(st.settings['categories']), ['src', 'mov'])
+        c.add_filter()
+        c.filters.item(0, 1).setText(r'\.(mov)$')
+        self.assertEqual(st.settings['categories']['mov']['filters'][0]['search'], r'\.(mov)$')
+        c.move(-1)
+        self.assertEqual(list(st.settings['categories']), ['mov', 'src'])
+        QtWidgets.QInputDialog.answer = ('movies', True)
+        c.rename()
+        self.assertEqual(list(st.settings['categories']), ['movies', 'src'])
+        c.delete()
+        self.assertEqual(list(st.settings['categories']), ['src'])
+
+        t.pages.setCurrentIndex(3)
         idx = t.json_model.index(0, 1)
         self.assertTrue(idx.isValid())
         t.validate()
@@ -178,14 +216,27 @@ class GuiSmoke(unittest.TestCase):
         pr.folder.setText(self.tmp + '/presets')
         pr._folder_changed()
         pr.name.setText('comp last 2')
-        pr.embed.setChecked(True)
         pr.save()
         self.assertEqual(pr.preset_names(), ['comp last 2'])
+        preset_file = self.tmp + '/presets/comp last 2.json'
+        # the preset is now where the settings live
+        self.assertEqual((st.settings_source, st.settings_path, st.dirty), ('preset', preset_file, False))
+        self.assertEqual(t.path.text(), preset_file)
+        # editing + Save writes into the preset, keeping its GUI state
+        t.pool.user_types('pool_in_preset')
+        self.assertTrue(st.dirty)
+        t.save()
+        with open(preset_file, encoding='utf-8') as f:
+            pdata = json.load(f)
+        self.assertEqual(pdata['settings']['deadline_job']['pool'], 'pool_in_preset')
+        self.assertEqual(pdata['gui']['search_contains'], '/work/comp/')
         s.search_contains.setText('/work/roto/')
         self.assertTrue(pr.load('comp last 2'))
         self.assertEqual(s.search_contains.text(), '/work/comp/')
-        self.assertFalse(st.dirty)                   # embedded == file on disk
+        self.assertFalse(st.dirty)
+        self.assertEqual(st.settings['deadline_job']['pool'], 'pool_in_preset')
         self.assertEqual(st.ini.get_str('presets_folder'), self.tmp + '/presets')
+        self.assertEqual(st.ini.get_str('last_preset'), 'comp last 2')
 
         # ---- Write job files (no Deadline here)
         q.reset_job_root()
@@ -226,6 +277,12 @@ class GuiSmoke(unittest.TestCase):
         win.closeEvent(ev)
         self.assertTrue(ev.ok)
         self.assertEqual(st.ini.get_str('search_contains'), '/work/comp/')
+
+        # ---- restart: the last preset is restored
+        win2 = MainWindow(app_dir, handler)
+        self.assertEqual(win2.state.settings_source, 'preset')
+        self.assertEqual(win2.state.settings_path, preset_file)
+        self.assertEqual(win2.state.settings['deadline_job']['pool'], 'pool_in_preset')
 
 
 if __name__ == '__main__':

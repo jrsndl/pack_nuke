@@ -97,10 +97,11 @@ TIPS = {
     'Refresh': 'Refresh the list.',
 
     # ---------------------------------------------------------------- Settings
-    'Settings file:': 'settings.json used by the GUI and copied into every package.',
-    'Load': 'Load the file. Unsaved changes are lost (you are asked first).',
-    'Save': 'Save the current settings to the file (Ctrl+S).',
-    'Save as...': 'Save the current settings to a new file.',
+    'Settings file:': 'Where the settings come from: a loaded preset (settings embedded in it) or a settings.json. '
+                      'They are copied into every package.',
+    'Load': 'Load the settings from the file (a settings.json or a preset). Unsaved changes are lost (you are asked first).',
+    'Save': 'Save the current settings (Ctrl+S) - into the loaded preset, or into the settings.json file.',
+    'Save as...': 'Save the current settings as a plain settings.json file.',
     'Open in editor': 'Open settings.json in the default editor (use Load afterwards).',
     'Expand all': 'Expand every section.',
     'Collapse all': 'Collapse every section.',
@@ -121,7 +122,7 @@ TIPS = {
     'Presets': 'Saved presets. Double click loads.',
     'Preset content': 'What the selected preset contains.',
     'Name:': 'Name of the preset to save (an existing name is overwritten after confirmation).',
-    'Save preset': 'Save the current search, filters, places and settings file as a preset.',
+    'Save preset': 'Save the complete settings plus the current search, filters and places as a preset.',
     'Default source place:': 'Source place selected automatically when settings are loaded.',
 
     # ---------------------------------------------------------------- Log

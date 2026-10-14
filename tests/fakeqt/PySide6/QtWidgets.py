@@ -446,6 +446,7 @@ class QListWidgetItem:
 
 class QListWidget(QWidget):
     currentTextChanged = Signal(str)
+    currentRowChanged = Signal(int)
     itemDoubleClicked = Signal(object)
 
     def __init__(self, *a):
@@ -477,7 +478,11 @@ class QListWidget(QWidget):
     def setCurrentRow(self, i):
         if i != self._cur:
             self._cur = i
+            self.currentRowChanged.emit(i)
             self.currentTextChanged.emit(self._items[i].text() if 0 <= i < len(self._items) else '')
+
+    def currentRow(self):
+        return self._cur
 
     def setCurrentItem(self, it):
         self.setCurrentRow(self._items.index(it))

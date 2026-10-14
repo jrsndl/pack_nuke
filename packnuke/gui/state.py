@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -30,6 +32,32 @@ class QueueEntry:
     @classmethod
     def from_script(cls, e: ScriptEntry) -> 'QueueEntry':
         return cls(path=e.path, name=e.name, folder=e.folder, version=e.version)
+
+
+PRESET_KIND = 'packnuke_preset'
+
+
+def is_preset_file(path: str) -> bool:
+    """A preset is a JSON object with "kind": "packnuke_preset"."""
+    if not path or not os.path.isfile(path):
+        return False
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get('kind') == PRESET_KIND
+
+
+def write_preset_settings(path: str, settings: Dict[str, Any]) -> None:
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    data['settings'] = settings
+    data['settings_saved'] = time.strftime('%Y-%m-%d %H:%M:%S')
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 def to_bool(value: Any, default: bool = False) -> bool:
@@ -93,6 +121,8 @@ class AppState(QtCore.QObject):
         self.app_dir = paths.norm(app_dir)
         self.ini = Ini(self.app_dir + '/settings.ini')
         self.settings_path = ''
+        self.settings_source = 'file'      # 'file' = plain settings.json, 'preset' = embedded in a preset
+        self.preset_name = ''
         self.settings: Dict[str, Any] = settings_mod.complete({})
         self._dirty = False
         self.place_source = ''
@@ -128,6 +158,8 @@ class AppState(QtCore.QObject):
             return False
         self.settings = data
         self.settings_path = path
+        self.settings_source = 'file'
+        self.preset_name = ''
         self.set_dirty(False)
         self._fix_places()
         log.info('Loaded settings %s (%d places, %d categories)', path, len(data['places']),
@@ -138,29 +170,47 @@ class AppState(QtCore.QObject):
         self.places_changed.emit()
         return True
 
-    def set_settings(self, data: Dict[str, Any], path: str = '', dirty: bool = True) -> None:
+    def set_settings(self, data: Dict[str, Any], path: str = '', dirty: bool = True,
+                     source: str = 'file', preset_name: str = '') -> None:
         self.settings = settings_mod.complete(data)
         if path:
             self.settings_path = paths.norm(path)
+        self.settings_source = source
+        self.preset_name = preset_name if source == 'preset' else ''
         self.set_dirty(dirty)
         self._fix_places()
         self.settings_loaded.emit()
         self.places_changed.emit()
 
     def save_settings(self, path: Optional[str] = None) -> bool:
+        """Save to ``path`` (default: where the settings came from). A preset file keeps its
+        GUI state and only gets its embedded settings replaced."""
         path = paths.norm(path or self.settings_path)
         if not path:
             log.error('No settings file path to save to.')
             return False
         try:
-            settings_mod.save_settings(self.settings, path)
-        except OSError as e:
+            if is_preset_file(path):
+                write_preset_settings(path, self.settings)
+                self.settings_source = 'preset'
+                self.preset_name = self.preset_name or os.path.splitext(os.path.basename(path))[0]
+            else:
+                settings_mod.save_settings(self.settings, path)
+                self.settings_source = 'file'
+                self.preset_name = ''
+        except (OSError, ValueError) as e:
             log.error('Saving settings to %s failed: %s', path, e)
             return False
         self.settings_path = path
         self.set_dirty(False)
-        log.info('Saved settings to %s', path)
+        self.settings_loaded.emit()
+        log.info('Saved settings to %s%s', path, ' (preset)' if self.settings_source == 'preset' else '')
         return True
+
+    def source_text(self) -> str:
+        if self.settings_source == 'preset':
+            return 'preset "{}"'.format(self.preset_name)
+        return 'settings file'
 
     # ------------------------------------------------------------------ places
     def place_names(self) -> List[str]:

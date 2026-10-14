@@ -92,21 +92,48 @@ tests/                  python -m unittest discover -s tests
 
 ### Settings
 
-* Load, save or save-as of `settings.json`. **Open in editor** opens the file in your editor.
-* **Farm**: Nuke, deadlinecommand and the farm `pack_nuke.py` path per OS, the Deadline job
-  options, and packing options (copy threads, skip identical, hashes, category match, missing
-  files, write nodes, node colours, gizmos to groups).
+Settings come from the **loaded preset**, with the settings embedded in it. When no preset has
+been loaded, they come from `settings.json` in the app folder. The file field shows which one
+is in use.
+
+* **Save** (`Ctrl+S`) writes back into that preset, or into that file.
+* **Save as...** writes a plain `settings.json`.
+* **Load** accepts either a `settings.json` or a preset file.
+
+The sub-tabs:
+
+* **Farm & Misc**:
+  * Nuke, deadlinecommand and the farm `pack_nuke.py` path per OS.
+  * Deadline job options.
+  * Packing options: copy threads, skip identical, hashes, category match, missing files, Write
+    nodes, node colours, gizmos to groups.
+* **Nuke Scripts**:
+  * Turns each of the source, package and target scripts on or off.
+  * Sets their paths, plus the target's path at the receiving place.
+  * Sets relative linking: folders above the script, or a custom project directory.
+  * Every path is shown resolved for the preview script, with missing tokens highlighted.
+* **Categories**:
+  * Add, duplicate, rename, delete and reorder categories.
+  * Set the package and relink folder templates, the skip disabled/disconnected options and
+    AND/OR filter combination.
+  * The filters table has source, regex, check list, token name and invert columns.
+  * A **Test** box takes a file path, node class and knob, and shows each filter's hit/value,
+    whether the category matches, and the resolved package and target folders.
 * **All settings (JSON)**: every value, editable; types are preserved.
-* **Validation** lists errors and warnings: bad regexes, typos like `/1` or `{2-4}`, and more.
+* **Validation**: errors and warnings, such as bad regexes and typos like `/1` or `{2-4}`.
 
 ### Presets
 
-* `settings.ini` → `presets_folder` stores where presets are kept (default `./presets`). Point
-  it at a shared folder to share presets.
-* A preset stores the search root, skip folders, depth, filters, version regex, first/last N,
-  source/target place and the settings file. It can optionally embed a full copy of the settings.
-* Presets can be saved, loaded (double click), deleted, and the presets folder opened.
-* **Default source place** is used when settings are loaded.
+* `settings.ini` → `presets_folder` sets where presets are kept (default `./presets`). Use a
+  shared folder to share them between artists.
+* A preset always contains the **complete settings**, plus the search root, skip folders,
+  depth, filters, version regex, first/last N and source/target place.
+* Loading or saving a preset makes it the settings source, so the Settings tab saves into it.
+* The last loaded preset is restored on start. The last session's search and filter fields
+  are kept on top of it.
+* Presets saved by the previous version only referenced a settings file. On load, that file's
+  content is taken into the preset; press Save to keep it.
+* **Default source place** is selected when settings are loaded.
 
 ### Log
 

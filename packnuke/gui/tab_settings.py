@@ -1,13 +1,16 @@
-"""Settings tab: settings.json file handling, comfortable farm settings, raw JSON tree."""
+"""Settings tab: where the settings live (preset or settings.json), farm & misc options, Nuke scripts,
+categories, raw JSON tree and validation."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import Dict, Tuple
 
 from PySide6 import QtGui, QtWidgets
 
 from ..core import settings as settings_mod
-from .state import AppState
+from .settings_pages import CategoriesPage, NukeScriptsPage
+from .state import AppState, is_preset_file
 from . import help as help_texts
 from .widgets import JsonTreeModel, PathEdit, button, hbox, hint, label, open_path, set_status_label, vbox
 
@@ -27,13 +30,18 @@ class SettingsTab(QtWidgets.QWidget):
         state.settings_loaded.connect(self.reload)
         state.dirty_changed.connect(self._update_dirty)
         state.settings_edited.connect(self._external_edit)
+        state.preview_changed.connect(self._refresh_previews)
+        state.places_selected.connect(self._refresh_previews)
 
     # ------------------------------------------------------------------ UI
     def _build(self) -> None:
-        self.path = PathEdit('open', 'JSON (*.json);;All files (*)', 'path to settings.json')
+        self.path = PathEdit('open', 'JSON (*.json);;All files (*)', 'path to settings.json or a preset')
         self.path.edit.returnPressed.connect(self.load)
         self.dirty_label = label('')
-        file_row = hbox(label('Settings file:'), self.path, button('Load', self.load),
+        self.source_label = label('')
+        self.source_label.setToolTip('Where the current settings come from. After loading or saving a preset, '
+                                     'Save writes into that preset; otherwise into the settings.json file.')
+        file_row = hbox(label('Settings file:'), self.path, self.source_label, button('Load', self.load),
                         button('Save', self.save), button('Save as...', self.save_as),
                         button('Open in editor', lambda: open_path(self.state.settings_path)), self.dirty_label)
 
@@ -134,10 +142,23 @@ class SettingsTab(QtWidgets.QWidget):
         val = QtWidgets.QWidget()
         val.setLayout(vbox(hbox(button('Validate', self.validate), None), self.issues, margins=4))
 
+        self.nuke_scripts = NukeScriptsPage(self.state, self._commit)
+        ns_scroll = QtWidgets.QScrollArea()
+        ns_scroll.setWidgetResizable(True)
+        ns_scroll.setWidget(self.nuke_scripts)
+        self.categories = CategoriesPage(self.state, self._commit)
+
         self.pages = QtWidgets.QTabWidget()
-        self.pages.addTab(scroll, 'Farm')
+        self.pages.addTab(scroll, 'Farm && Misc')
+        self.pages.addTab(ns_scroll, 'Nuke Scripts')
+        self.pages.addTab(self.categories, 'Categories')
         self.pages.addTab(raw, 'All settings (JSON)')
         self.pages.addTab(val, 'Validation')
+        for i, t in enumerate(('Executables per OS, Deadline job and packing options.',
+                               'Where the source, package and target Nuke scripts are written and how they link.',
+                               'Media categories: package folders and the filters deciding which files go where.',
+                               'Every setting as a tree.', 'Errors and warnings in the settings.')):
+            self.pages.setTabToolTip(i, t)
         self.pages.currentChanged.connect(self._page_changed)
         help_texts.apply([
             (self.path, 'Settings file:'), (self.path.edit, 'Settings file:'), (self.pool, 'Pool:'),
@@ -156,12 +177,25 @@ class SettingsTab(QtWidgets.QWidget):
     # ------------------------------------------------------------------ load / save
     def load(self) -> None:
         path = self.path.text()
-        if self.state.dirty and path != self.state.settings_path:
+        if self.state.dirty:
             if QtWidgets.QMessageBox.question(self, 'Unsaved changes', 'Discard unsaved settings changes?') \
                     != QtWidgets.QMessageBox.Yes:
                 return
-        if self.state.load_settings(path):
-            self.state.ini.set('settings_file', path)
+        if is_preset_file(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except (OSError, ValueError) as e:
+                log.error('Cannot read preset %s: %s', path, e)
+                return
+            if not isinstance(data.get('settings'), dict):
+                log.error('Preset %s has no embedded settings - load it in the Presets tab.', path)
+                return
+            self.state.set_settings(data['settings'], path, dirty=False, source='preset',
+                                    preset_name=data.get('name') or '')
+            log.info('Loaded settings of preset %s', path)
+            self.validate()
+        elif self.state.load_settings(path):
             self.validate()
 
     def save(self) -> None:
@@ -172,16 +206,14 @@ class SettingsTab(QtWidgets.QWidget):
         if path != self.state.settings_path and QtWidgets.QMessageBox.question(
                 self, 'Save settings', 'Save the current settings to\n{}?'.format(path)) != QtWidgets.QMessageBox.Yes:
             return
-        if self.state.save_settings(path):
-            self.state.ini.set('settings_file', path)
+        self.state.save_settings(path)
 
     def save_as(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save settings as', self.state.settings_path,
                                                         'JSON (*.json)')
         if path:
             self.path.setText(path)
-            if self.state.save_settings(path):
-                self.state.ini.set('settings_file', path)
+            self.state.save_settings(path)
 
     def _update_dirty(self, dirty: bool) -> None:
         set_status_label(self.dirty_label, not dirty, 'unsaved changes' if dirty else 'saved')
@@ -192,6 +224,7 @@ class SettingsTab(QtWidgets.QWidget):
         self._loading = True
         try:
             self.path.setText(self.state.settings_path)
+            self.source_label.setText('({})'.format(self.state.source_text()))
             for (key, system), pe in self._platform_edits.items():
                 pe.setText(settings_mod.platform_value(s.get(key) or {}, system))
             dj = s.get('deadline_job') or {}
@@ -218,7 +251,13 @@ class SettingsTab(QtWidgets.QWidget):
             self.json_model.load(s)
         finally:
             self._loading = False
+        self.nuke_scripts.reload()
+        self.categories.reload()
         self._update_dirty(self.state.dirty)
+
+    def _refresh_previews(self, *_args) -> None:
+        self.nuke_scripts.refresh_previews()
+        self.categories.refresh_previews()
 
     def _commit(self, places: bool = False) -> None:
         self._self_edit = True
@@ -229,15 +268,17 @@ class SettingsTab(QtWidgets.QWidget):
 
     def _external_edit(self) -> None:
         # places/anatomy edits elsewhere: keep the JSON tree in sync when it is visible
-        if not self._self_edit and self.pages.currentIndex() == 1:
+        if not self._self_edit and self.pages.currentIndex() == 3:
             self.json_model.load(self.state.settings)
+        if not self._self_edit:
+            self._refresh_previews()
 
     def _page_changed(self, index: int) -> None:
-        if index == 1:
+        if index == 3:
             self.json_model.load(self.state.settings)
-        elif index == 2:
+        elif index == 4:
             self.validate()
-        elif index == 0:
+        else:
             self.reload()
 
     def _platform_edited(self, key: str, system: str) -> None:
