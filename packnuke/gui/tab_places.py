@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import copy
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core import filters, preflight, settings as settings_mod, templates
 from .state import AppState
+from . import help as help_texts
 from .widgets import Debouncer, button, clip_get, clip_put, hbox, hint, label, vbox
 
 log = logging.getLogger('packnuke.gui')
@@ -122,7 +124,11 @@ class PlacesTab(QtWidgets.QWidget):
 
         # preview
         self.preview_title = label('')
-        self.preview_title.setWordWrap(True)
+        self.preview_places = label('')
+        for lbl in (self.preview_title, self.preview_places):
+            lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+            lbl.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
+            lbl.setMinimumHeight(lbl.fontMetrics().height() + 6)
         self.preview = QtWidgets.QTreeWidget()
         self.preview.setColumnCount(3)
         self.preview.setHeaderLabels(['Output', 'Resolved', 'Template'])
@@ -132,7 +138,7 @@ class PlacesTab(QtWidgets.QWidget):
         self.preview.setUniformRowHeights(True)
         preview_box = QtWidgets.QGroupBox('Output path preview')
         preview_box.setLayout(vbox(
-            self.preview_title,
+            self.preview_title, self.preview_places,
             hint('Uses the current source/target places (Queue tab). Farm-only tokens such as {node} '
                  'or {category} are shown as <node>. Missing tokens are highlighted.'),
             self.preview, hbox(None, button('Refresh', self.refresh_preview)), margins=6))
@@ -142,6 +148,10 @@ class PlacesTab(QtWidgets.QWidget):
         top.addWidget(self.editor_tabs)
         top.setStretchFactor(1, 1)
         top.setSizes([200, 800])
+        help_texts.apply([
+            (self.place_list, 'Places'), (self.anatomy, 'anatomy_table'), (self.tags, 'tags_table'),
+            (self.use_tags, 'Use script path tags for this place'), (self.preview, 'preview_tree'),
+            (self.role_label, 'Whether this place is the current source or target (Queue tab)')])
         main = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         main.addWidget(top)
         main.addWidget(preview_box)
@@ -470,9 +480,19 @@ class PlacesTab(QtWidgets.QWidget):
                     it.setForeground(MISSING_COLOR)
                 elif script:
                     v = filters.eval_path_tag(tag, script)
-                    it.setText('' if v is None else v)
-                    it.setToolTip('no match' if v is None else v)
-                    it.setForeground(MISSING_COLOR if v is None else QtGui.QColor('#b1b1b1'))
+                    warns = []
+                    replace = tag['replace'] or ''
+                    if re.search(r'(?<!\\)/\d', replace) and '\\' not in replace:
+                        warns.append('Replace "{}" is literal text - did you mean "\\{}"?'.format(
+                            replace, replace.lstrip('/')[:1]))
+                    if re.search(r'\{\d+-\d+\}', tag['search'] or ''):
+                        warns.append('"{a-b}" in the regex is literal text, a quantifier is written "{a,b}".')
+                    if not self.use_tags.isChecked():
+                        warns.append('Script path tags are switched off for this place.')
+                    text = 'no match' if v is None else v
+                    it.setText(('⚠ ' if warns else '') + text)
+                    it.setToolTip('\n'.join([text] + warns + ['', 'Script: ' + script]))
+                    it.setForeground(MISSING_COLOR if (v is None or warns) else QtGui.QColor('#b1b1b1'))
                 else:
                     it.setText('')
                     it.setToolTip('No preview script (add one to the Queue or select one in Get Nuke Scripts)')
@@ -552,12 +572,14 @@ class PlacesTab(QtWidgets.QWidget):
         st = self.state
         script = st.preview_script()
         self.preview.clear()
+        self.preview_places.setText('Places: {} → {}'.format(st.place_source or '?', st.place_target or '?'))
         if not script:
             self.preview_title.setText('No preview script. Add scripts to the Queue, or select one in '
                                        'Get Nuke Scripts.')
+            self.preview_title.setToolTip('')
             return
-        self.preview_title.setText('Preview for: {}\nPlaces: {} → {}'.format(
-            script, st.place_source or '?', st.place_target or '?'))
+        self.preview_title.setText('Preview for: {}'.format(script))
+        self.preview_title.setToolTip(script)
         tok = st.script_tokens(script)
 
         def add(parent, name, resolved, tpl='', missing=()):

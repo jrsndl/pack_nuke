@@ -7,6 +7,7 @@ from typing import Any, Dict
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import __version__
+from . import help as help_texts
 from .state import AppState
 from .tab_log import LogTab, QtLogHandler
 from .tab_places import PlacesTab
@@ -44,6 +45,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.settings_tab, 'Settings')
         self.tabs.addTab(self.presets, 'Presets')
         self.tabs.addTab(self.log_tab, 'Log')
+        for i in range(self.tabs.count()):
+            self.tabs.setTabToolTip(i, help_texts.tip('tab:' + self.tabs.tabText(i)))
         self.setCentralWidget(self.tabs)
 
         # status bar
@@ -53,6 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.busy_bar.setMaximumWidth(160)
         self.busy_bar.setMaximumHeight(14)
         self.busy_bar.setVisible(False)
+        self.busy_bar.setToolTip('Working (search, submission or local run)')
         self.settings_label = QtWidgets.QLabel('')
         self.statusBar().addWidget(self.status_label, 1)
         self.statusBar().addPermanentWidget(self.settings_label)

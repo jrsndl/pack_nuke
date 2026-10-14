@@ -13,6 +13,7 @@ from PySide6 import QtCore, QtWidgets
 
 from ..core import paths, settings as settings_mod
 from .state import AppState
+from . import help as help_texts
 from .widgets import PathEdit, button, hbox, hint, label, open_path, vbox
 
 log = logging.getLogger('packnuke.gui')
@@ -80,6 +81,9 @@ class PresetsTab(QtWidgets.QWidget):
             hint('A preset stores: search root, skip folders, depth, filters, version regex, first/last N, '
                  'source/target place and the settings file.'), margins=6))
 
+        help_texts.apply([
+            (self.folder, 'Presets folder:'), (self.folder.edit, 'Presets folder:'), (self.list, 'Presets'),
+            (self.details, 'Preset content'), (self.name, 'Name:'), (self.default_place, 'Default source place:')])
         self.setLayout(vbox(
             hbox(label('Presets folder:'), self.folder, button('Open', lambda: open_path(self.folder.text()))),
             hint('The folder is stored in settings.ini (presets_folder). Share it between artists to share presets.'),

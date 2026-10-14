@@ -8,6 +8,7 @@ from PySide6 import QtGui, QtWidgets
 
 from ..core import settings as settings_mod
 from .state import AppState
+from . import help as help_texts
 from .widgets import JsonTreeModel, PathEdit, button, hbox, hint, label, open_path, set_status_label, vbox
 
 log = logging.getLogger('packnuke.gui')
@@ -91,6 +92,20 @@ class SettingsTab(QtWidgets.QWidget):
             pk.addRow('', w)
             w.toggled.connect(self._packing_edited)
         self.copy_threads.valueChanged.connect(self._packing_edited)
+        for w, t in ((self.skip_identical, 'Re-running a job only copies new or changed files (copy.skip_identical).'),
+                     (self.hashes, 'Hash every packed file (blake2b) while copying; stored in the report '
+                                   '(hashes.hashes_generate).'),
+                     (self.category_first, 'Off: a file matching several categories is copied into each of them. '
+                                           'On: only into the first matching one (packing.category_match).'),
+                     (self.fail_missing, 'Missing source files make the Deadline job fail '
+                                         '(packing.fail_on_missing). Off: they are only reported.'),
+                     (self.include_writes, 'Write nodes are outputs; their existing renders are skipped unless '
+                                           'this is on (packing.include_write_nodes).'),
+                     (self.mark_nodes, 'Packed nodes get a green tile colour, duplicates a darker green '
+                                       '(packing.mark_nodes).'),
+                     (self.to_groups, 'Gizmos are converted to groups so the package works without the gizmo '
+                                      'files (gizmos.to_groups).')):
+            w.setToolTip(t)
         form.addWidget(pk_box)
         form.addStretch(1)
         scroll = QtWidgets.QScrollArea()
@@ -124,6 +139,18 @@ class SettingsTab(QtWidgets.QWidget):
         self.pages.addTab(raw, 'All settings (JSON)')
         self.pages.addTab(val, 'Validation')
         self.pages.currentChanged.connect(self._page_changed)
+        help_texts.apply([
+            (self.path, 'Settings file:'), (self.path.edit, 'Settings file:'), (self.pool, 'Pool:'),
+            (self.group, 'Group:'), (self.priority, 'Priority:'), (self.department, 'Department:'),
+            (self.limit_groups, 'Limit groups:'), (self.comment, 'Comment:'),
+            (self.copy_threads, 'Copy threads:'), (self.tree, 'json_tree'),
+            (self.issues, 'Validation results (errors stop packing, warnings are hints)'),
+            (self.dirty_label, 'Whether the settings in the GUI are saved to the file')])
+        for (key, system), pe in self._platform_edits.items():
+            pe.setToolTip({'nuke': 'Nuke executable used on {} machines (farm and Run first locally).',
+                           'deadline': 'deadlinecommand used to submit from {} machines.',
+                           'deadline_python': 'pack_nuke.py from this repository, as {} farm machines see it.'}
+                          [key].format(system))
         self.setLayout(vbox(file_row, self.pages, margins=6))
 
     # ------------------------------------------------------------------ load / save

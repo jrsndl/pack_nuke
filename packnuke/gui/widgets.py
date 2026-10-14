@@ -9,6 +9,8 @@ from typing import Any, Callable, Iterable, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from . import help as help_texts
+
 
 # ------------------------------------------------------------------ layout helpers
 
@@ -47,6 +49,7 @@ def button(text: str, slot: Optional[Callable] = None, tip: str = '', icon: str 
     b = QtWidgets.QPushButton(text)
     if icon:
         b.setIcon(QtGui.QIcon(icon))
+    tip = tip or help_texts.tip(text)
     if tip:
         b.setToolTip(tip)
     if object_name:
@@ -60,6 +63,7 @@ def label(text: str, object_name: str = '', tip: str = '') -> QtWidgets.QLabel:
     lbl = QtWidgets.QLabel(text)
     if object_name:
         lbl.setObjectName(object_name)
+    tip = tip or help_texts.tip(text)
     if tip:
         lbl.setToolTip(tip)
     return lbl
@@ -105,7 +109,7 @@ class PathEdit(QtWidgets.QWidget):
         self.edit.setPlaceholderText(placeholder)
         self.btn = QtWidgets.QPushButton()
         self.btn.setIcon(QtGui.QIcon(':/images/folder.png'))
-        self.btn.setToolTip('Browse')
+        self.btn.setToolTip('Browse...')
         self.btn.setFixedWidth(34)
         self.btn.clicked.connect(self.browse)
         self.edit.textChanged.connect(self.changed.emit)

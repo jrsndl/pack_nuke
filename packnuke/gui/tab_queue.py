@@ -12,6 +12,7 @@ from ..core import jobs, paths, preflight, settings as settings_mod, templates, 
 from ..farm import deadline
 from .script_models import QueueModel, SortProxy
 from .state import AppState
+from . import help as help_texts
 from .widgets import (KeyValueTable, PathEdit, button, configure_table, first_selected_row, hbox, label,
                       reveal, selected_rows, set_status_label, vbox)
 from .workers import SubmitWorker
@@ -67,7 +68,6 @@ class QueueTab(QtWidgets.QWidget):
         self.inspector_btn = QtWidgets.QPushButton('Inspector')
         self.inspector_btn.setCheckable(True)
         self.inspector_btn.setChecked(True)
-        self.inspector_btn.setToolTip('Show / hide the token inspector (drag the splitter to resize)')
         self.inspector_btn.toggled.connect(self._toggle_inspector)
         row_actions = hbox(
             button('Mark all', lambda: self.model.set_marks(None, True)),
@@ -140,6 +140,13 @@ class QueueTab(QtWidgets.QWidget):
         job_box.setLayout(vbox(grid, hbox(None, self.check_btn, self.write_btn, self.local_btn, self.submit_btn),
                                margins=6))
 
+        help_texts.apply([
+            (self.table, 'queue_table'), (self.insp_table, 'inspector_table'),
+            (self.insp_only_tags, 'Script path tags only'), (self.inspector_btn, 'Inspector'), (self.place_source, 'Source place:'),
+            (self.place_target, '\u2192  Target place:'), (self.job_root, 'Job root:'),
+            (self.job_root.edit, 'Job root:'), (self.job_name, 'Job name:'),
+            (self.job_folder_label, 'Job folder:'), (self.counts, 'Scripts in the queue / marked for packing'),
+            (self.job_name_state, 'Result of the job name check (settings job.job_name_check)')])
         self.setLayout(vbox(self.splitter, job_box, margins=6))
 
     # ------------------------------------------------------------------ places / job fields

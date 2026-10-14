@@ -36,6 +36,12 @@ class QWidget(QObject):
     def style(self):
         return _Anything()
 
+    def fontMetrics(self):
+        class _FM:
+            def height(self):
+                return 14
+        return _FM()
+
 
 class QMainWindow(QWidget):
     def setCentralWidget(self, w):
@@ -530,6 +536,12 @@ class QTabWidget(QWidget):
     def addTab(self, w, title):
         self._tabs.append([w, title])
 
+    def setTabToolTip(self, i, t):
+        self._tabs[i].append(t)
+
+    def count(self):
+        return len(self._tabs)
+
     def setTabText(self, i, t):
         self._tabs[i][1] = t
 
@@ -637,3 +649,7 @@ class QInputDialog:
     @staticmethod
     def getText(*a, **k):
         return QInputDialog.answer
+
+
+class QSizePolicy:
+    Ignored, Fixed, Preferred, Expanding, Minimum = 0, 1, 2, 3, 4

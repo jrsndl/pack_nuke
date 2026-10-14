@@ -9,6 +9,7 @@ from typing import Deque, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from . import help as help_texts
 from .widgets import button, hbox, label, vbox
 
 LEVELS = [('Debug', logging.DEBUG), ('Info', logging.INFO), ('Warning', logging.WARNING),
@@ -78,6 +79,8 @@ class LogTab(QtWidgets.QWidget):
         font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont)
         self.view.setFont(font)
         self._counts = {lvl: 0 for _n, lvl in LEVELS}
+        help_texts.apply([(self.level_combo, 'Show level:'), (self.search, 'log_filter'),
+                          (self.autoscroll, 'Auto scroll'), (self.view, 'Application messages; select text to copy it'), (self.counts, 'Warnings and errors logged so far')])
 
         self.setLayout(vbox(
             hbox(label('Show level:'), self.level_combo, label('  and above'), 12, self.search, self.autoscroll,
@@ -134,6 +137,8 @@ class LogTab(QtWidgets.QWidget):
     def clear(self) -> None:
         self.records.clear()
         self._counts = {lvl: 0 for _n, lvl in LEVELS}
+        help_texts.apply([(self.level_combo, 'Show level:'), (self.search, 'log_filter'),
+                          (self.autoscroll, 'Auto scroll'), (self.view, 'Application messages; select text to copy it'), (self.counts, 'Warnings and errors logged so far')])
         self._update_counts()
         self.view.clear()
 

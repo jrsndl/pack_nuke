@@ -10,6 +10,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ..core.scanner import ScanStats, parse_skip_patterns
 from ..core.versions import ScriptEntry, VersionFilter
 from .script_models import ScriptTableModel, SortProxy
+from . import help as help_texts
 from .widgets import (Debouncer, PathEdit, button, configure_table, first_selected_row, hbox, hint, label,
                       reveal, selected_rows, vbox)
 from .workers import ScanWorker
@@ -129,6 +130,13 @@ class ScriptsTab(QtWidgets.QWidget):
         top.addWidget(label('Skip folders:'), 1, 0)
         top.addLayout(hbox(self.skip_dirs, label('Max depth:'), self.max_depth, label('Parallel:'), self.threads), 1, 1)
 
+        help_texts.apply([
+            (self.root, 'Search root:'), (self.root.edit, 'Search root:'), (self.skip_dirs, 'Skip folders:'),
+            (self.max_depth, 'Max depth:'), (self.threads, 'Parallel:'), (self.search_for, 'Search for:'),
+            (self.search_contains, 'Only if contains:'), (self.version_regex, 'Version regex:'),
+            (self.first_enabled, 'First versions:'), (self.first_n, 'First versions:'),
+            (self.last_enabled, 'Last versions:'), (self.last_n, 'Last versions:'),
+            (self.table, 'scripts_table'), (self.counts, 'Shown rows / marked rows')])
         self.setLayout(vbox(top, hint('The search collects every *.nk once; the filters below then work '
                                       'on that list instantly.'), filters_box, self.table, actions, margins=6))
 
