@@ -1,5 +1,5 @@
 {
-    "schema_version": 2,
+    "schema_version": 3,
     "_comment": "Pack Nuke settings. See README. Templates use {token} or nested {project[name]}; tokens come from the source place anatomy, script path tags, and job/script values.",
     "job": {
         "_comment": "Package folder = job_root/job_name. Uses the source place anatomy plus place_source, place_target and timestamp (UTC YYMMDD_HHMM_ + local offset).",
@@ -214,38 +214,52 @@
                     "invert": false
                 }
             ]
+        },
+        "fonts": {
+            "special": "fonts",
+            "_comment": "Built-in category: font files used by Text/FreeType nodes. The project font path of the packaged scripts points here.",
+            "enabled": true,
+            "path": {
+                "root_template": "{job}/_shared",
+                "root_template_relink": "/vendor1_relink_root/_shared",
+                "top_folder": "fonts",
+                "top_folder_relink": "fonts"
+            },
+            "filter_options": {
+                "skip_disconnected": true,
+                "skip_disabled": true
+            }
+        },
+        "gizmos": {
+            "special": "gizmos",
+            "_comment": "Built-in category: .gizmo files. to_groups converts gizmos to groups in the packaged scripts (the files are still copied).",
+            "enabled": true,
+            "to_groups": true,
+            "path": {
+                "root_template": "{job}/_shared",
+                "root_template_relink": "/vendor1_relink_root/_shared",
+                "top_folder": "gizmos",
+                "top_folder_relink": "gizmos"
+            },
+            "filter_options": {
+                "skip_disconnected": true,
+                "skip_disabled": true
+            }
+        },
+        "ocio": {
+            "special": "ocio",
+            "_comment": "Built-in category: the folder of the custom OCIO config (or $OCIO). max_files is a safety limit.",
+            "enabled": true,
+            "relative": true,
+            "max_files": 5000,
+            "path": {
+                "root_template": "{job}/_shared/ocio",
+                "root_template_relink": "/vendor1_relink_root/_shared/ocio",
+                "top_folder": "",
+                "top_folder_relink": ""
+            },
+            "filter_options": {}
         }
-    },
-    "fonts": {
-        "_comment": "Font category",
-        "enabled": true,
-        "root_template": "{job}/_shared",
-        "root_template_relink": "/vendor1_relink_root/_shared",
-        "top_folder": "fonts",
-        "top_folder_relink": "fonts",
-        "skip_disconnected": true,
-        "skip_disabled": true
-    },
-    "gizmos": {
-        "_comment": "Gizmos category. Option to convert gizmos to groups still copies the gizmos.",
-        "enabled": true,
-        "to_groups": true,
-        "root_template": "{job}/_shared",
-        "root_template_relink": "/vendor1_relink_root/_shared",
-        "top_folder": "gizmos",
-        "top_folder_relink": "gizmos",
-        "skip_disconnected": true,
-        "skip_disabled": true
-    },
-    "ocio": {
-        "_comment": "Copies the folder containing the custom OCIO config (or $OCIO). Refuses folders with more than max_files files.",
-        "enabled": true,
-        "root_template": "{job}/_shared/ocio",
-        "root_template_relink": "/vendor1_relink_root/_shared/ocio",
-        "top_folder": "",
-        "top_folder_relink": "",
-        "relative": true,
-        "max_files": 5000
     },
     "nuke": {
         "_comment": "OS specific path to Nuke executable to be used for Deadline processing.",

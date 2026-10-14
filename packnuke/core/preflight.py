@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Tuple
 
-from . import templates
+from . import settings as settings_mod, templates
 
 # tokens that only exist per file/node on the farm
 DYNAMIC_TOKENS = ('category', 'node', 'node_class', 'knob', 'clean_name', 'extension', 'font', 'class')
@@ -24,13 +24,13 @@ def all_templates(cfg: Mapping[str, Any]) -> List[Tuple[str, str]]:
             out.append(('Target script (at target place)', sec.get('path_relink', '')))
         if sec.get('relative') and sec.get('relative_custom_project'):
             out.append(('{} project dir'.format(which.capitalize()), sec.get('relative_custom_project_template', '')))
-    for cname, cat in (cfg.get('categories') or {}).items():
+    for cname, cat in settings_mod.media_categories(cfg).items():
         p = cat.get('path') or {}
         out.append(('Category {}'.format(cname), templates.join_template(p.get('root_template', ''), p.get('top_folder', ''))))
         out.append(('Category {} (relink)'.format(cname),
                     templates.join_template(p.get('root_template_relink', ''), p.get('top_folder_relink', ''))))
-    for kind in ('fonts', 'gizmos', 'ocio'):
-        sec = cfg.get(kind) or {}
+    for kind in settings_mod.SPECIAL_CATEGORIES:
+        sec = settings_mod.special(cfg, kind)
         if not sec.get('enabled', True):
             continue
         out.append((kind.capitalize(), templates.join_template(sec.get('root_template', ''), sec.get('top_folder', ''))))

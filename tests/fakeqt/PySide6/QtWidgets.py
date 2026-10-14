@@ -440,6 +440,16 @@ class QListWidgetItem:
     def text(self):
         return self._text
 
+    def font(self):
+        from .QtGui import QFont
+        return QFont()
+
+    def setFont(self, f):
+        pass
+
+    def setToolTip(self, t):
+        self._tip = t
+
     def setForeground(self, c):
         pass
 
@@ -657,4 +667,7 @@ class QInputDialog:
 
 
 class QSizePolicy:
-    Ignored, Fixed, Preferred, Expanding, Minimum = 0, 1, 2, 3, 4
+    Ignored, Fixed, Preferred, Expanding, Minimum, Maximum = 0, 1, 2, 3, 4, 5
+
+    def __init__(self, *a):
+        pass

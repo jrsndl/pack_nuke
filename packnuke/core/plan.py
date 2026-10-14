@@ -226,7 +226,7 @@ class _Builder:
     # -------------------------------------------------------------- media
     def build_media(self) -> None:
         cfg = self.cfg
-        categories = cfg.get('categories') or {'default': settings_mod.DEFAULT_CATEGORY}
+        categories = settings_mod.media_categories(cfg) or {'default': settings_mod.DEFAULT_CATEGORY}
         packing = cfg.get('packing') or {}
         first_only = packing.get('category_match') == 'first'
         include_writes = bool(packing.get('include_write_nodes'))
@@ -351,7 +351,8 @@ class _Builder:
         item.sizes = [os.path.getsize(item.source)]
         item.categories = [kind]
         name = paths.basename(item.source)
-        extra = dict(extra, node=node, node_class=node_class, clean_name=name, category=kind)
+        extra = dict(extra, node=node, node_class=node_class, clean_name=name,
+                     category={FONT: 'fonts', GIZMO: 'gizmos'}.get(kind, kind))
         try:
             tgt = self.shared_target(section, kind, extra, name)
         except templates.TemplateError as e:
@@ -364,7 +365,7 @@ class _Builder:
             item.status, item.reason = ST_ERROR, item.errors[0]
 
     def build_fonts(self) -> None:
-        section = self.cfg.get('fonts') or {}
+        section = settings_mod.special(self.cfg, 'fonts')
         by_path: Dict[str, int] = {}
         for sf in self.scan.files:
             if sf.is_font:
@@ -376,7 +377,7 @@ class _Builder:
                                    f.disconnected, info, by_path, {'font': f.family}, False)
 
     def build_gizmos(self) -> None:
-        section = self.cfg.get('gizmos') or {}
+        section = settings_mod.special(self.cfg, 'gizmos')
         by_path: Dict[str, int] = {}
         for g in self.scan.gizmos:
             self._single_file_kind(GIZMO, section, g.node, g.node_class, '', g.path, g.disabled,
@@ -384,7 +385,7 @@ class _Builder:
 
     # -------------------------------------------------------------- OCIO
     def build_ocio(self) -> None:
-        section = self.cfg.get('ocio') or {}
+        section = settings_mod.special(self.cfg, 'ocio')
         o = self.scan.ocio
         info = 'color_management={}; config={}; path={}{}'.format(
             o.color_management, o.config, o.config_path, ' (from $OCIO)' if o.from_env else '')
@@ -440,10 +441,10 @@ class _Builder:
                 self.plan.errors.append('{} {}: {}'.format(item.kind, item.node, e))
             if item.status == ST_MISSING:
                 self.plan.warnings.append('{} {} ({}): {}'.format(item.kind, item.node, item.knob, item.reason))
-            if item.in_gizmo and item.status == ST_OK and not (self.cfg.get('gizmos') or {}).get('to_groups'):
+            if item.in_gizmo and item.status == ST_OK and not settings_mod.special(self.cfg, 'gizmos').get('to_groups'):
                 self.plan.warnings.append(
                     'node {} is inside a gizmo: its file is copied but the relink will not persist '
-                    '(enable gizmos.to_groups)'.format(item.node))
+                    '(enable "convert gizmos to groups" in the gizmos category)'.format(item.node))
         return self.plan
 
 

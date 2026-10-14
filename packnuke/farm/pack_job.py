@@ -90,7 +90,7 @@ class PackRunner:
         self.host.open_script(src)
 
         gizmos = self.host.scan_gizmos()
-        if (cfg.get('gizmos') or {}).get('to_groups') and gizmos:
+        if settings_mod.special(cfg, 'gizmos').get('to_groups') and gizmos:
             for msg in self.host.convert_gizmos_to_groups():
                 log.info('%s', msg)
                 if msg.startswith('failed'):

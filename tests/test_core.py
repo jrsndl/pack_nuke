@@ -203,6 +203,24 @@ class TestSettings(unittest.TestCase):
         issues = settings_mod.validate(cfg)
         self.assertEqual(settings_mod.errors_only(issues), [])
 
+    def test_special_categories_migration(self):
+        old = {'fonts': {'enabled': False, 'root_template': '{job}/f', 'root_template_relink': '/r/f',
+                         'top_folder': 'x', 'top_folder_relink': 'y', 'skip_disabled': False},
+               'gizmos': {'to_groups': True, 'root_template': '{job}/g', 'root_template_relink': '/r/g'},
+               'categories': {'src': {'path': {'root_template': '{job}', 'root_template_relink': '{job}'}}}}
+        cfg = settings_mod.complete(old)
+        self.assertNotIn('fonts', cfg)
+        self.assertEqual(list(cfg['categories']), ['src', 'fonts', 'gizmos', 'ocio'])
+        self.assertEqual(cfg['categories']['fonts']['path']['root_template'], '{job}/f')
+        self.assertFalse(cfg['categories']['fonts']['filter_options']['skip_disabled'])
+        f = settings_mod.special(cfg, 'fonts')
+        self.assertEqual((f['enabled'], f['top_folder'], f['skip_disabled']), (False, 'x', False))
+        self.assertTrue(settings_mod.special(cfg, 'gizmos')['to_groups'])
+        self.assertEqual(settings_mod.special(cfg, 'ocio')['max_files'], 5000)
+        self.assertEqual(list(settings_mod.media_categories(cfg)), ['src'])
+        # idempotent
+        self.assertEqual(settings_mod.complete(cfg), cfg)
+
     def test_migration_and_validation(self):
         data = {'places': {'a': {'is_source': True, 'script_path_tags': [
             {'name': 'S', 'source': 'File Name', 'search': r'^(sq\d{2-4})', 'replace': '/1'}]}},

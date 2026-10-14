@@ -114,6 +114,10 @@ The sub-tabs:
   * Every path is shown resolved for the preview script, with missing tokens highlighted.
 * **Categories**:
   * Add, duplicate, rename, delete and reorder categories.
+  * **fonts**, **gizmos** and **ocio** are built-in categories. They always exist and their names
+    can't change, and they have no filters, because the scan decides what they contain. Their
+    folders and options can be edited: pack on/off, skip disabled/disconnected,
+    *convert gizmos to groups* and the OCIO *relative path* / *max files*.
   * Set the package and relink folder templates, the skip disabled/disconnected options and
     AND/OR filter combination.
   * The filters table has source, regex, check list, token name and invert columns.
@@ -192,6 +196,8 @@ cleared or saved, and errors also show in the status bar. The GUI also writes a 
 See the `_comment` keys in `settings.json`. Settings from the previous version are migrated
 when loaded:
 
+* The top-level `fonts` / `gizmos` / `ocio` sections become the built-in categories
+  (schema 3).
 * `"Full Path"` becomes `"File Path"`.
 * `is_source` / `is_target` are removed.
 * Missing sections get defaults.
@@ -204,7 +210,7 @@ Notable keys:
 | `packing.category_match` | `all` (copy into every matching category) or `first` |
 | `packing.include_write_nodes` | also pack files referenced by Write-type nodes (off by default) |
 | `packing.fail_on_missing`, `packing.mark_nodes` | |
-| `ocio.max_files` | safety limit for copying the OCIO config folder |
+| `categories.ocio.max_files` | safety limit for copying the OCIO config folder |
 | `nuke_scripts.<source/package/target>.copy` | which scripts to write |
 
 ## Tests

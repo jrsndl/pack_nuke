@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Mapping, Tuple
 
 from . import filters, templates
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 PLATFORMS = ('Windows', 'Linux', 'Darwin')
 
 
@@ -36,15 +36,41 @@ DEFAULT_CATEGORY = {
     'filters': [],
 }
 
-_SHARED = {
-    'enabled': True,
-    'root_template': '{job}/_shared',
-    'root_template_relink': '{job}/_shared',
-    'top_folder': '',
-    'top_folder_relink': '',
-    'skip_disconnected': True,
-    'skip_disabled': True,
+# Built-in categories: fixed names, no filters (what they hold is decided by the scan).
+SPECIAL_CATEGORIES = ('fonts', 'gizmos', 'ocio')
+SPECIAL_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    'fonts': {'special': 'fonts', 'enabled': True,
+              'path': {'root_template': '{job}/_shared', 'root_template_relink': '{job}/_shared',
+                       'top_folder': 'fonts', 'top_folder_relink': 'fonts'},
+              'filter_options': {'skip_disconnected': True, 'skip_disabled': True}},
+    'gizmos': {'special': 'gizmos', 'enabled': True, 'to_groups': False,
+               'path': {'root_template': '{job}/_shared', 'root_template_relink': '{job}/_shared',
+                        'top_folder': 'gizmos', 'top_folder_relink': 'gizmos'},
+               'filter_options': {'skip_disconnected': True, 'skip_disabled': True}},
+    'ocio': {'special': 'ocio', 'enabled': True, 'relative': True, 'max_files': 5000,
+             'path': {'root_template': '{job}/_shared', 'root_template_relink': '{job}/_shared',
+                      'top_folder': 'ocio', 'top_folder_relink': 'ocio'},
+             'filter_options': {}},
 }
+_PATH_KEYS = ('root_template', 'root_template_relink', 'top_folder', 'top_folder_relink')
+
+
+def is_special(name: str) -> bool:
+    return name in SPECIAL_CATEGORIES
+
+
+def media_categories(cfg: Mapping[str, Any]) -> Dict[str, Any]:
+    """Regular (filter based) categories, in order."""
+    return {k: v for k, v in (cfg.get('categories') or {}).items() if not is_special(k)}
+
+
+def special(cfg: Mapping[str, Any], kind: str) -> Dict[str, Any]:
+    """A built-in category as one flat dict: enabled, root_template..., skip_*, and its extras."""
+    cat = templates.deep_merge(SPECIAL_DEFAULTS[kind], (cfg.get('categories') or {}).get(kind) or {})
+    flat = {k: v for k, v in cat.items() if k not in ('path', 'filter_options')}
+    flat.update(cat.get('path') or {})
+    flat.update(cat.get('filter_options') or {})
+    return flat
 
 DEFAULTS: Dict[str, Any] = {
     'schema_version': SCHEMA_VERSION,
@@ -83,9 +109,6 @@ DEFAULTS: Dict[str, Any] = {
     },
     'places': {},
     'categories': {},
-    'fonts': dict(_SHARED, top_folder='fonts', top_folder_relink='fonts'),
-    'gizmos': dict(_SHARED, top_folder='gizmos', top_folder_relink='gizmos', to_groups=False),
-    'ocio': dict(_SHARED, top_folder='ocio', top_folder_relink='ocio', relative=True, max_files=5000),
     'nuke': {p: '' for p in PLATFORMS},
     'deadline': {p: '' for p in PLATFORMS},
     'deadline_python': {p: '' for p in PLATFORMS},
@@ -124,6 +147,21 @@ def defaults() -> Dict[str, Any]:
 def migrate(data: Mapping[str, Any]) -> Dict[str, Any]:
     """Bring an older settings dict up to the current schema (non-destructive copy)."""
     data = copy.deepcopy(dict(data))
+    # v2 -> v3: top level fonts / gizmos / ocio sections become built-in categories
+    cats = data.setdefault('categories', {}) or {}
+    data['categories'] = cats
+    for kind in SPECIAL_CATEGORIES:
+        old = data.pop(kind, None)
+        if isinstance(old, dict) and kind not in cats:
+            new: Dict[str, Any] = {'special': kind, 'path': {}, 'filter_options': {}}
+            for k, v in old.items():
+                if k in _PATH_KEYS:
+                    new['path'][k] = v
+                elif k in ('skip_disconnected', 'skip_disabled'):
+                    new['filter_options'][k] = v
+                elif k not in ('subfolders',):
+                    new[k] = v
+            cats[kind] = new
     for cat in (data.get('categories') or {}).values():
         for flt in cat.get('filters') or []:
             if 'source' in flt:
@@ -142,6 +180,13 @@ def complete(data: Mapping[str, Any]) -> Dict[str, Any]:
     """Migrate and deep-merge defaults under ``data``."""
     data = migrate(data)
     out = templates.deep_merge(defaults(), data)
+    # built-in categories always exist, after the regular ones
+    cats = {k: v for k, v in out['categories'].items() if not is_special(k)}
+    for kind in SPECIAL_CATEGORIES:
+        cats[kind] = templates.deep_merge(SPECIAL_DEFAULTS[kind], out['categories'].get(kind) or {})
+        cats[kind]['special'] = kind
+        cats[kind].pop('filters', None)
+    out['categories'] = cats
     for name, place in list(out['places'].items()):
         out['places'][name] = templates.deep_merge(DEFAULT_PLACE, place)
     return out
@@ -222,6 +267,8 @@ def validate(data: Mapping[str, Any]) -> List[Issue]:
         for key in ('root_template', 'root_template_relink'):
             if not (cat.get('path') or {}).get(key):
                 err('categories.{}.path.{} is empty'.format(cname, key))
+        if is_special(cname):
+            continue
         combine = str((cat.get('filter_options') or {}).get('combine_filters', 'AND')).upper()
         if combine not in ('AND', 'OR'):
             err('categories.{}.filter_options.combine_filters must be AND or OR'.format(cname))
@@ -231,7 +278,7 @@ def validate(data: Mapping[str, Any]) -> List[Issue]:
                 err('{}: unknown source "{}" (use one of {})'.format(where, flt.get('source'), ', '.join(filters.SOURCES)))
             if flt.get('source') != filters.SOURCE_NODE_CLASS:
                 check_regex(where, flt.get('search'))
-    if not data.get('categories'):
+    if not media_categories(data):
         warn('No categories defined, the built-in default category will be used.')
 
     if data['packing'].get('category_match') not in ('all', 'first'):

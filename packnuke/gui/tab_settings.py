@@ -93,10 +93,9 @@ class SettingsTab(QtWidgets.QWidget):
         self.fail_missing = QtWidgets.QCheckBox('Fail the farm job when source files are missing')
         self.include_writes = QtWidgets.QCheckBox('Also pack files of Write nodes (existing renders)')
         self.mark_nodes = QtWidgets.QCheckBox('Colour relinked nodes in the packaged scripts')
-        self.to_groups = QtWidgets.QCheckBox('Convert gizmos to groups in the packaged scripts')
         pk.addRow('Copy threads:', self.copy_threads)
         for w in (self.skip_identical, self.hashes, self.category_first, self.fail_missing, self.include_writes,
-                  self.mark_nodes, self.to_groups):
+                  self.mark_nodes):
             pk.addRow('', w)
             w.toggled.connect(self._packing_edited)
         self.copy_threads.valueChanged.connect(self._packing_edited)
@@ -110,9 +109,7 @@ class SettingsTab(QtWidgets.QWidget):
                      (self.include_writes, 'Write nodes are outputs; their existing renders are skipped unless '
                                            'this is on (packing.include_write_nodes).'),
                      (self.mark_nodes, 'Packed nodes get a green tile colour, duplicates a darker green '
-                                       '(packing.mark_nodes).'),
-                     (self.to_groups, 'Gizmos are converted to groups so the package works without the gizmo '
-                                      'files (gizmos.to_groups).')):
+                                       '(packing.mark_nodes).')):
             w.setToolTip(t)
         form.addWidget(pk_box)
         form.addStretch(1)
@@ -247,7 +244,6 @@ class SettingsTab(QtWidgets.QWidget):
             self.fail_missing.setChecked(bool(s['packing'].get('fail_on_missing')))
             self.include_writes.setChecked(bool(s['packing'].get('include_write_nodes')))
             self.mark_nodes.setChecked(bool(s['packing'].get('mark_nodes', True)))
-            self.to_groups.setChecked(bool(s['gizmos'].get('to_groups')))
             self.json_model.load(s)
         finally:
             self._loading = False
@@ -307,7 +303,6 @@ class SettingsTab(QtWidgets.QWidget):
         s['packing']['fail_on_missing'] = self.fail_missing.isChecked()
         s['packing']['include_write_nodes'] = self.include_writes.isChecked()
         s['packing']['mark_nodes'] = self.mark_nodes.isChecked()
-        s['gizmos']['to_groups'] = self.to_groups.isChecked()
         self._commit()
 
     def _json_edited(self) -> None:

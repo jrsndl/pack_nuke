@@ -72,6 +72,7 @@ def label(text: str, object_name: str = '', tip: str = '') -> QtWidgets.QLabel:
 def hint(text: str) -> QtWidgets.QLabel:
     lbl = label(text, 'hint')
     lbl.setWordWrap(True)
+    lbl.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
     return lbl
 
 

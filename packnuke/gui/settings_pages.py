@@ -207,18 +207,21 @@ class CategoriesPage(QtWidgets.QWidget):
     def _build(self) -> None:
         self.list = QtWidgets.QListWidget()
         self.list.setToolTip('Categories are evaluated in this order. With "first matching category only" '
-                             '(Farm & Misc) the order decides. Double click to rename.')
+                             '(Farm & Misc) the order decides. Double click to rename.\n'
+                             'fonts, gizmos and ocio are built-in categories: their names are fixed and they have '
+                             'no filters (the scan decides what they contain), but their folders and options '
+                             'can be edited.')
         self.list.currentRowChanged.connect(lambda _r: self._load_category())
         self.list.itemDoubleClicked.connect(lambda _i: self.rename())
         left = QtWidgets.QWidget()
         left.setLayout(vbox(
             label('Categories'), self.list,
-            hbox(button('Add', self.add, 'Create a new category'),
-                 button('Duplicate', self.duplicate, 'Copy the selected category under a new name')),
-            hbox(button('Rename', self.rename, 'Rename the selected category ({category} token)'),
-                 button('Delete', self.delete, 'Delete the selected category')),
-            hbox(button('Up', lambda: self.move(-1), 'Move the category up'),
-                 button('Down', lambda: self.move(1), 'Move the category down'))))
+            hbox(button('Add', self.add, 'Create a new category'), self._btn('dup', button(
+                'Duplicate', self.duplicate, 'Copy the selected category under a new name'))),
+            hbox(self._btn('ren', button('Rename', self.rename, 'Rename the selected category ({category} token)')),
+                 self._btn('del', button('Delete', self.delete, 'Delete the selected category'))),
+            hbox(self._btn('up', button('Up', lambda: self.move(-1), 'Move the category up')),
+                 self._btn('down', button('Down', lambda: self.move(1), 'Move the category down')))))
 
         # paths
         self.fields: Dict[str, QtWidgets.QLineEdit] = {}
@@ -241,8 +244,8 @@ class CategoriesPage(QtWidgets.QWidget):
             r = ResolvedLabel()
             self.resolved[key] = r
             pf.addRow(title, r)
-        pf.addRow('', hint('Per file tokens: {category} {node} {node_class} {knob} {clean_name} {extension} '
-                           'plus the token names of the filters below.'))
+        self.tokens_hint = hint('')
+        pf.addRow('', self.tokens_hint)
 
         # options
         self.skip_disconnected = QtWidgets.QCheckBox('Skip disconnected nodes')
@@ -256,8 +259,26 @@ class CategoriesPage(QtWidgets.QWidget):
         for w in (self.skip_disconnected, self.skip_disabled):
             w.toggled.connect(self._edited)
         self.combine.currentTextChanged.connect(self._edited)
+        self.combine_label = label('Combine filters:')
+        self.enabled = QtWidgets.QCheckBox('Pack these files')
+        self.enabled.setToolTip('Switch off to leave these files out of the package (they keep their original paths).')
+        self.to_groups = QtWidgets.QCheckBox('Convert gizmos to groups')
+        self.to_groups.setToolTip('Gizmos are converted to groups in the packaged scripts, so they work without the '
+                                  'gizmo files (the .gizmo files are still copied).')
+        self.ocio_relative = QtWidgets.QCheckBox('Relative config path')
+        self.ocio_relative.setToolTip('The packaged scripts point to the copied OCIO config relative to the script.')
+        self.max_files_label = label('Max files:')
+        self.max_files = QtWidgets.QSpinBox()
+        self.max_files.setRange(0, 1000000)
+        self.max_files.setSpecialValueText('no limit')
+        self.max_files.setToolTip('Safety limit: refuse to copy an OCIO config folder with more files than this.')
+        self.max_files_label.setToolTip(self.max_files.toolTip())
+        for w in (self.enabled, self.to_groups, self.ocio_relative):
+            w.toggled.connect(self._edited)
+        self.max_files.valueChanged.connect(self._edited)
         opt_box = QtWidgets.QGroupBox('Options')
-        opt_box.setLayout(hbox(self.skip_disconnected, self.skip_disabled, 16, label('Combine filters:'),
+        opt_box.setLayout(hbox(self.enabled, self.skip_disconnected, self.skip_disabled, self.to_groups,
+                               self.ocio_relative, self.max_files_label, self.max_files, 16, self.combine_label,
                                self.combine, None, margins=6))
 
         # filters
@@ -277,6 +298,7 @@ class CategoriesPage(QtWidgets.QWidget):
             'Invert: flips the hit.  Test: result for the test file below.')
         self.filters.itemChanged.connect(self._edited)
         filt_box = QtWidgets.QGroupBox('Filters')
+        self.filt_box = filt_box
         filt_box.setLayout(vbox(
             self.filters,
             hbox(button('Add filter', self.add_filter, 'Add a filter row'),
@@ -306,24 +328,42 @@ class CategoriesPage(QtWidgets.QWidget):
         self.test_result = label('')
         self.test_result.setWordWrap(True)
         test_box = QtWidgets.QGroupBox('Test')
+        self.test_box = test_box
         test_box.setLayout(vbox(
             hbox(label('File:'), self.test_path, label('Class:'), self.test_class, label('Knob:'), self.test_knob,
                  self.test_disabled, self.test_disconnected),
             self.test_result, margins=6))
 
+        self.special_note = hint('')
         right = QtWidgets.QWidget()
-        right.setLayout(vbox(path_box, opt_box, filt_box, test_box))
+        rl = QtWidgets.QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.addWidget(self.special_note)
+        rl.addWidget(path_box)
+        rl.addWidget(opt_box)
+        rl.addWidget(filt_box, 1)
+        rl.addWidget(test_box)
+        rl.addStretch(0)
+        self.right_layout = rl
         self.editor = right
         split = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         split.addWidget(left)
         split.addWidget(right)
         split.setStretchFactor(1, 1)
         split.setSizes([180, 800])
-        self.setLayout(vbox(
-            hint('Categories decide where media files go in the package. A file joins every category whose '
-                 'filters match (or only the first, see Farm & Misc). Files matching no category are not '
-                 'packed and keep their original path.'),
-            split))
+        intro = hint('Categories decide where media files go in the package. A file joins every category whose '
+                     'filters match (or only the first, see Farm & Misc); files matching none keep their original '
+                     'path. fonts, gizmos and ocio are built-in.')
+        main = QtWidgets.QVBoxLayout(self)
+        main.setContentsMargins(0, 0, 0, 0)
+        main.addWidget(intro, 0)
+        main.addWidget(split, 1)
+
+    def _btn(self, key: str, b: QtWidgets.QPushButton) -> QtWidgets.QPushButton:
+        if not hasattr(self, '_buttons'):
+            self._buttons: Dict[str, QtWidgets.QPushButton] = {}
+        self._buttons[key] = b
+        return b
 
     # ------------------------------------------------------------------ data helpers
     def cats(self) -> Dict[str, Any]:
@@ -337,27 +377,39 @@ class CategoriesPage(QtWidgets.QWidget):
         return self.cats().get(self.current())
 
     def _set_cats(self, items: List) -> None:
-        self.state.settings['categories'] = dict(items)
+        """Store categories; built-in ones always stay at the end."""
+        items = list(items)
+        regular = [(k, v) for k, v in items if not settings_mod.is_special(k)]
+        special = [(k, v) for k, v in items if settings_mod.is_special(k)]
+        self.state.settings['categories'] = dict(regular + special)
 
-    def reload(self) -> None:
-        cur = self.current()
+    def is_special(self) -> bool:
+        return settings_mod.is_special(self.current())
+
+    def _fill_list(self, select: str) -> None:
         names = list(self.cats().keys())
         self.list.blockSignals(True)
         self.list.clear()
         self.list.addItems(names)
-        self.list.blockSignals(False)
-        if names:
-            self.list.setCurrentRow(names.index(cur) if cur in names else 0)
-        self._load_category()
-
-    def _after_change(self, select: str) -> None:
-        names = list(self.cats().keys())
-        self.list.blockSignals(True)
-        self.list.clear()
-        self.list.addItems(names)
+        for i, n in enumerate(names):
+            if settings_mod.is_special(n):
+                it = self.list.item(i)
+                f = it.font()
+                f.setItalic(True)
+                it.setFont(f)
+                it.setForeground(QtGui.QColor('#8fb8de'))
+                it.setToolTip('Built-in category "{}": name fixed, no filters.'.format(n))
         self.list.blockSignals(False)
         if names:
             self.list.setCurrentRow(names.index(select) if select in names else 0)
+
+    def reload(self) -> None:
+        self._fill_list(self.current())
+        self._load_category()
+
+    def _after_change(self, select: str) -> None:
+        self._set_cats(self.cats().items())
+        self._fill_list(select)
         self._load_category()
         self.commit()
 
@@ -366,8 +418,8 @@ class CategoriesPage(QtWidgets.QWidget):
         name = (name or '').strip()
         if not ok or not name:
             return ''
-        if name in self.cats():
-            QtWidgets.QMessageBox.warning(self, title, 'Category "{}" already exists.'.format(name))
+        if name in self.cats() or settings_mod.is_special(name):
+            QtWidgets.QMessageBox.warning(self, title, 'Category "{}" already exists or is a built-in name.'.format(name))
             return ''
         return name
 
@@ -379,7 +431,7 @@ class CategoriesPage(QtWidgets.QWidget):
 
     def duplicate(self) -> None:
         cat = self.cat()
-        if cat is None:
+        if cat is None or self.is_special():
             return
         name = self._ask('Duplicate category', self.current() + '_copy')
         if name:
@@ -388,7 +440,7 @@ class CategoriesPage(QtWidgets.QWidget):
 
     def rename(self) -> None:
         old = self.current()
-        if not old:
+        if not old or self.is_special():
             return
         new = self._ask('Rename category', old)
         if new:
@@ -397,7 +449,7 @@ class CategoriesPage(QtWidgets.QWidget):
 
     def delete(self) -> None:
         name = self.current()
-        if not name:
+        if not name or self.is_special():
             return
         if QtWidgets.QMessageBox.question(self, 'Delete category', 'Delete category "{}"?'.format(name)) \
                 != QtWidgets.QMessageBox.Yes:
@@ -409,7 +461,8 @@ class CategoriesPage(QtWidgets.QWidget):
         items = list(self.cats().items())
         i = self.list.currentRow()
         j = i + delta
-        if i < 0 or not (0 <= j < len(items)):
+        if i < 0 or not (0 <= j < len(items)) or settings_mod.is_special(items[i][0]) \
+                or settings_mod.is_special(items[j][0]):
             return
         items[i], items[j] = items[j], items[i]
         self._set_cats(items)
@@ -418,10 +471,17 @@ class CategoriesPage(QtWidgets.QWidget):
     # ------------------------------------------------------------------ editor
     def _load_category(self) -> None:
         cat = self.cat()
+        special = self.is_special()
         self.editor.setEnabled(cat is not None)
+        self._update_mode(special)
         self._loading = True
         try:
-            cat = templates.deep_merge(settings_mod.DEFAULT_CATEGORY, cat or {})
+            base = settings_mod.SPECIAL_DEFAULTS[self.current()] if special else settings_mod.DEFAULT_CATEGORY
+            cat = templates.deep_merge(base, cat or {})
+            self.enabled.setChecked(bool(cat.get('enabled', True)))
+            self.to_groups.setChecked(bool(cat.get('to_groups')))
+            self.ocio_relative.setChecked(bool(cat.get('relative', True)))
+            self.max_files.setValue(int(cat.get('max_files', 5000) or 0))
             p = cat.get('path') or {}
             for key, e in self.fields.items():
                 e.setText(str(p.get(key, '') or ''))
@@ -435,6 +495,44 @@ class CategoriesPage(QtWidgets.QWidget):
         finally:
             self._loading = False
         self.run_test()
+
+    SPECIAL_NOTES = {
+        'fonts': 'Built-in category: font files used by Text / FreeType nodes. The packaged scripts get their '
+                 'project font path pointed here.',
+        'gizmos': 'Built-in category: the .gizmo files of gizmos used in the script.',
+        'ocio': 'Built-in category: the folder holding the custom OCIO config (or $OCIO), copied with its '
+                'sub folders.',
+    }
+    SPECIAL_TOKENS = {
+        'fonts': '{category} {node} {node_class} {clean_name} (file name) {font} (family)',
+        'gizmos': '{category} {node} {node_class} {class} {clean_name} (file name)',
+        'ocio': '{category}. The config folder name is kept below this folder.',
+    }
+
+    def _update_mode(self, special: bool) -> None:
+        kind = self.current()
+        self.filt_box.setVisible(not special)
+        self.test_box.setVisible(not special)
+        self.combine.setVisible(not special)
+        self.combine_label.setVisible(not special)
+        self.enabled.setVisible(special)
+        self.to_groups.setVisible(kind == 'gizmos')
+        self.ocio_relative.setVisible(kind == 'ocio')
+        self.max_files.setVisible(kind == 'ocio')
+        self.max_files_label.setVisible(kind == 'ocio')
+        self.skip_disabled.setVisible(kind != 'ocio')
+        self.skip_disconnected.setVisible(kind != 'ocio')
+        self.special_note.setVisible(special)
+        self.special_note.setText(self.SPECIAL_NOTES.get(kind, ''))
+        self.tokens_hint.setText('Tokens: ' + self.SPECIAL_TOKENS[kind] if special else
+                                 'Per file tokens: {category} {node} {node_class} {knob} {clean_name} {extension} '
+                                 'plus the token names of the filters below.')
+        # filters take the free space; for built-in categories the free space goes to the bottom
+        self.right_layout.setStretch(3, 0 if special else 1)
+        self.right_layout.setStretch(5, 1 if special else 0)
+        for key in ('dup', 'ren', 'del', 'up', 'down'):
+            if key in getattr(self, '_buttons', {}):
+                self._buttons[key].setEnabled(not special)
 
     def _append_filter(self, flt: Dict[str, Any]) -> None:
         r = self.filters.rowCount()
@@ -479,10 +577,25 @@ class CategoriesPage(QtWidgets.QWidget):
         if cat is None:
             return
         cat['path'] = dict(cat.get('path') or {}, **{k: e.text() for k, e in self.fields.items()})
-        cat['filter_options'] = dict(cat.get('filter_options') or {}, skip_disconnected=self.skip_disconnected.isChecked(),
-                                     skip_disabled=self.skip_disabled.isChecked(),
-                                     combine_filters=self.combine.currentText())
-        cat['filters'] = self._filter_rows()
+        kind = self.current()
+        if settings_mod.is_special(kind):
+            cat['special'] = kind
+            cat['enabled'] = self.enabled.isChecked()
+            if kind == 'gizmos':
+                cat['to_groups'] = self.to_groups.isChecked()
+            if kind == 'ocio':
+                cat['relative'] = self.ocio_relative.isChecked()
+                cat['max_files'] = self.max_files.value()
+                cat['filter_options'] = {}
+            else:
+                cat['filter_options'] = {'skip_disconnected': self.skip_disconnected.isChecked(),
+                                         'skip_disabled': self.skip_disabled.isChecked()}
+        else:
+            cat['filter_options'] = dict(cat.get('filter_options') or {},
+                                         skip_disconnected=self.skip_disconnected.isChecked(),
+                                         skip_disabled=self.skip_disabled.isChecked(),
+                                         combine_filters=self.combine.currentText())
+            cat['filters'] = self._filter_rows()
         self.run_test()
         self.commit()
 
@@ -554,7 +667,7 @@ class CategoriesPage(QtWidgets.QWidget):
         finally:
             self._loading = was
 
-        if cat is not None and path:
+        if cat is not None and path and not self.is_special():
             ok, tokens, reason = filters.match_category(cat, subject, self.test_disabled.isChecked(),
                                                         self.test_disconnected.isChecked())
             extra.update(tokens)
@@ -574,7 +687,7 @@ class CategoriesPage(QtWidgets.QWidget):
 
         tok = preview_tokens(self.state, extra)
         f = {k: e.text() for k, e in self.fields.items()}
-        file_name = name or '<file>'
+        file_name = '<file>' if (self.is_special() or not name) else name
         self.resolved['package'].show_template(
             templates.join_template(f['root_template'], f['top_folder']) + '/' + file_name, tok)
         self.resolved['relink'].show_template(
