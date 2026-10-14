@@ -1,30 +1,30 @@
 {
+    "schema_version": 2,
+    "_comment": "Pack Nuke settings. See README. Templates use {token} or nested {project[name]}; tokens come from the source place anatomy, script path tags, and job/script values.",
     "job": {
-        "_comment": "Package folder configuration. Needs source and target place set. Source place anatomy and tags are used. Special timestamp tag for UTC time",
+        "_comment": "Package folder = job_root/job_name. Uses the source place anatomy plus place_source, place_target and timestamp (UTC YYMMDD_HHMM_ + local offset).",
         "job_name_default": "{place_source}2{place_target}_{timestamp}",
         "job_name_check": "^(.+)2(.+)_(\\d{6}_\\d{4})_([-]?\\d{4})[_]?(?:.*)$",
-        "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}",
-        "_comment2": "path, name and timestamp keys will be added here before saving the json to the package"
+        "job_root": "{root[work]}/{project[name]}/out/packNuke/{place_source}2{place_target}"
     },
     "nuke_scripts": {
         "source": {
-            "_comment": "Copies the source Nuke script to the package",
+            "_comment": "Copy of the original script, untouched.",
             "copy": true,
             "path": "{job}/{SHOT}/{script_name}_source.nk"
         },
         "package": {
-            "_comment": "Nuke script to be included in the package, with copied files relinked.",
+            "_comment": "Script inside the package, relinked to the copied files (relative to the script folder, N levels above it, or a custom project folder).",
             "copy": true,
             "path": "{job}/{SHOT}/{script_name}_check.nk",
-            "path_relink": "/vendor1_relink_root/{SHOT}/nuke/{script_name}_check.nk",
             "relative": true,
             "relative_custom_project": false,
             "relative_custom_project_template": "{job}",
             "relative_above_script": 1
         },
         "target": {
-            "_comment": "Same as package, should be removed.",
-            "copy": true,
+            "_comment": "Script relinked for the receiving place: saved at path, but its links point to the *_relink locations and relative paths are computed from path_relink (where it will live at the target).",
+            "copy": false,
             "path": "{job}/{SHOT}/{script_name}_target.nk",
             "path_relink": "/vendor1_relink_root/{SHOT}/nuke/{script_name}_target.nk",
             "relative": true,
@@ -34,15 +34,24 @@
         }
     },
     "hashes": {
-        "_comment": "Every discovered file will be hashed for later identification.",
+        "_comment": "Hash every packed file while copying (blake2b) for later identification.",
         "hashes_generate": false
+    },
+    "copy": {
+        "_comment": "Farm copy: files copied in parallel per job; identical files (same size and date) already in the package are skipped.",
+        "threads": 8,
+        "skip_identical": true
+    },
+    "packing": {
+        "_comment": "category_match: all = copy into every matching category, first = first match only. Write-type nodes are outputs and are skipped unless include_write_nodes.",
+        "category_match": "all",
+        "fail_on_missing": false,
+        "mark_nodes": true,
+        "include_write_nodes": false
     },
     "places": {
         "bc": {
-            "_comment": "Each place can have tags from anatomy (settings.json), and optionally parsed from the path.",
-            "is_source": false,
-            "is_target": false,
-            "_comment2": "is_source and is_target will be set grom the gui here before saving the json to the package",
+            "_comment": "Each place has anatomy tokens and optional tags parsed from the Nuke script path.",
             "anatomy": {
                 "studio": {
                     "name": "BlindCat",
@@ -69,7 +78,7 @@
                 {
                     "name": "SEQ",
                     "source": "File Name",
-                    "search": "^(sq\\d{2-4}).*$",
+                    "search": "^(sq\\d{2,4}).*$",
                     "replace": "\\1",
                     "lowercase": false,
                     "uppercase": false
@@ -101,8 +110,6 @@
             ]
         },
         "out": {
-            "is_source": false,
-            "is_target": false,
             "anatomy": {
                 "studio": {
                     "name": "Vendor1",
@@ -122,15 +129,15 @@
                     "name": "SHOT",
                     "source": "File Name",
                     "search": "^([^_]*_[^_]*_[^_]*_[^_]*)_([^_]*)(.*)$",
-                    "replace": "/1",
+                    "replace": "\\1",
                     "lowercase": false,
                     "uppercase": false
                 },
                 {
                     "name": "SEQ",
                     "source": "File Name",
-                    "search": "^(sq\\d{2-4}).*$",
-                    "replace": "/1",
+                    "search": "^(sq\\d{2,4}).*$",
+                    "replace": "\\1",
                     "lowercase": true,
                     "uppercase": false
                 },
@@ -138,7 +145,7 @@
                     "name": "TASK",
                     "source": "File Name",
                     "search": "^.*_([^_]+)_v\\d{2,4}.*$",
-                    "replace": "/1",
+                    "replace": "\\1",
                     "lowercase": true,
                     "uppercase": false
                 },
@@ -146,7 +153,7 @@
                     "name": "VERSION",
                     "source": "File Name",
                     "search": "^.*_v(\\d{2,4}).*$",
-                    "replace": "/1",
+                    "replace": "\\1",
                     "lowercase": false,
                     "uppercase": false
                 },
@@ -178,15 +185,22 @@
             },
             "filters": [
                 {
-                    "_comment": "Source: File Name|Full Path|Node Class. If check list is not empty, filter is true only if search group result matches one of the list item. Token name allows to add token, value is earch group result.",
+                    "_comment": "Source: File Name | File Path | Node Class | Knob Name. Regex group 1 is the value (whole match if no group). With a check list the filter hits only when the value is in the list (case-insensitive). invert flips the hit. token_name adds the value as a token.",
                     "source": "File Name",
                     "search": ".*\\.(\\w{2,4})$",
-                    "check": ["exr", "jpg", "jpeg", "mov", "mp4", "png"],
+                    "check": [
+                        "exr",
+                        "jpg",
+                        "jpeg",
+                        "mov",
+                        "mp4",
+                        "png"
+                    ],
                     "token_name": "extension",
                     "invert": false
                 },
                 {
-                    "source": "Full Path",
+                    "source": "File Path",
                     "search": ".*\\/(v\\d\\d\\d)\\/.*",
                     "check": [],
                     "token_name": "version_from_path",
@@ -194,9 +208,9 @@
                 },
                 {
                     "source": "Node Class",
-                    "search": "Read Write",
+                    "search": "Read DeepRead ReadGeo ReadGeo2 Camera Camera2 Camera3 Axis Axis2 Axis3 OCIOFileTransform Vectorfield",
                     "check": [],
-                    "token_name": "class_read_write",
+                    "token_name": "class_read",
                     "invert": false
                 }
             ]
@@ -224,14 +238,14 @@
         "skip_disabled": true
     },
     "ocio": {
-        "_comment": "OCIO category. Optionally copies all files found under the config parent folder.",
+        "_comment": "Copies the folder containing the custom OCIO config (or $OCIO). Refuses folders with more than max_files files.",
         "enabled": true,
         "root_template": "{job}/_shared/ocio",
         "root_template_relink": "/vendor1_relink_root/_shared/ocio",
         "top_folder": "",
         "top_folder_relink": "",
-        "subfolders": true,
-        "relative": true
+        "relative": true,
+        "max_files": 5000
     },
     "nuke": {
         "_comment": "OS specific path to Nuke executable to be used for Deadline processing.",
@@ -246,7 +260,7 @@
         "Darwin": "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe"
     },
     "deadline_python": {
-        "_comment": "OS specific path to Python script to be used for sending job to farm.",
+        "_comment": "Path to this repository's pack_nuke.py as seen by the farm machines.",
         "Windows": "c:/_GFX_library/pack_nuke/pack_nuke.py",
         "Linux": "c:/_GFX_library/pack_nuke/pack_nuke.py",
         "Darwin": "c:/_GFX_library/pack_nuke/pack_nuke.py"
@@ -257,6 +271,7 @@
         "group": "packnuke",
         "priority": 40,
         "department": "io",
-        "LimitGroups": "nuke"
+        "LimitGroups": "nuke",
+        "comment": ""
     }
 }

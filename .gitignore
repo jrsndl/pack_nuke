@@ -1,6 +1,9 @@
-
 .idea/
-
-pack_nuke_gui.log
-
+.venv/
+my_env/
 __pycache__/
+*.pyc
+
+pack_nuke_gui.log*
+presets/
+*.pnpart.*
