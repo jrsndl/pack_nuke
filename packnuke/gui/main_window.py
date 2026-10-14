@@ -9,6 +9,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from .. import __version__
 from . import help as help_texts
 from .state import AppState
+from .widgets import bold_group_titles
 from .tab_log import LogTab, QtLogHandler
 from .tab_places import PlacesTab
 from .tab_presets import PresetsTab
@@ -77,6 +78,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_tab.error_logged.connect(lambda msg: self.show_status('Error: ' + msg.splitlines()[0]))
         self.state.preview_providers.append(self._preview_path)
 
+        bold_group_titles(self)
         QtGui.QShortcut(QtGui.QKeySequence('Ctrl+S'), self, activated=self.settings_tab.save)
         QtGui.QShortcut(QtGui.QKeySequence('Ctrl+.'), self, activated=self.scripts.stop_scan)
         QtGui.QShortcut(QtGui.QKeySequence('Ctrl+F'), self, activated=self._focus_search)

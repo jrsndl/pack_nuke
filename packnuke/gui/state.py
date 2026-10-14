@@ -283,15 +283,10 @@ class AppState(QtCore.QObject):
         return added
 
     def build_job(self, job_folder: str, job_name: str) -> jobs.Job:
-        job = jobs.Job(job_name=job_name, job_path=paths.norm(job_folder), timestamp=self.timestamp,
-                       place_source=self.place_source, place_target=self.place_target)
-        for q in [q for q in self.queue if q.marked]:
-            sid = jobs.make_script_id(len(job.scripts), q.name)
-            job.scripts.append(jobs.JobScript(
-                id=sid, path=q.path, name=q.name, version=q.version,
-                tags=self.script_tags(q.path),
-                tokens=self.script_tokens(q.path, job_folder, job_name)))
-        return job
+        job_folder = paths.norm(job_folder)
+        return jobs.build_job(self.settings, self.place_source, self.place_target,
+                              [(q.path, q.version) for q in self.queue if q.marked], stamp=self.timestamp,
+                              job_root=paths.dirname(job_folder), job_name=job_name)
 
     def settings_copy(self) -> Dict[str, Any]:
         return copy.deepcopy(self.settings)

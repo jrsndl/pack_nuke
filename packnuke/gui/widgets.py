@@ -72,6 +72,9 @@ def label(text: str, object_name: str = '', tip: str = '') -> QtWidgets.QLabel:
 def hint(text: str) -> QtWidgets.QLabel:
     lbl = label(text, 'hint')
     lbl.setWordWrap(True)
+    f = lbl.font()
+    f.setPointSizeF(max(6.0, f.pointSizeF() - 1))   # smaller hint text, set in code, not in the style sheet
+    lbl.setFont(f)
     lbl.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
     return lbl
 
@@ -81,6 +84,20 @@ def set_status_label(lbl: QtWidgets.QLabel, ok: bool, text: str) -> None:
     lbl.setText(text)
     lbl.style().unpolish(lbl)
     lbl.style().polish(lbl)
+
+
+def bold_group_titles(root: QtWidgets.QWidget) -> None:
+    """Bold group box titles, set in code (a font-weight in the style sheet makes Qt mis-measure the
+    title). The bold font is not inherited by the group contents: direct children get the normal font."""
+    for box in root.findChildren(QtWidgets.QGroupBox):
+        normal = QtGui.QFont(box.font())
+        normal.setBold(False)
+        bold = QtGui.QFont(normal)
+        bold.setBold(True)
+        box.setFont(bold)
+        for child in box.findChildren(QtWidgets.QWidget, options=QtCore.Qt.FindDirectChildrenOnly):
+            if not isinstance(child, QtWidgets.QGroupBox):
+                child.setFont(normal)
 
 
 class Debouncer(QtCore.QObject):

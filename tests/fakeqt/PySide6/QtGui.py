@@ -15,6 +15,15 @@ class QFont(_Anything):
     def setBold(self, b):
         self.bold = b
 
+    def pointSizeF(self):
+        return self.__dict__.get('_pt', 10.0)
+
+    def setPointSizeF(self, v):
+        self._pt = float(v)
+
+    def setPointSize(self, v):
+        self._pt = float(v)
+
 
 class QKeySequence:
     Copy, Paste, Delete = 'copy', 'paste', 'delete'

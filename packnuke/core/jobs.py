@@ -21,7 +21,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from . import settings as settings_mod
+from . import paths, settings as settings_mod, templates, tokens as tokens_mod
 from .tokens import tags_summary
 
 JOB_FOLDER = '_pack_nuke'
@@ -110,3 +110,53 @@ def read_job(folder: str) -> Tuple[Job, Dict[str, Any]]:
     job = Job(scripts=scripts, **known)
     cfg = settings_mod.load_settings(folder + '/' + SETTINGS_FILE)
     return job, cfg
+
+
+def read_script_list(path: str) -> List[str]:
+    """Nuke script paths from a text file: one per line, blank lines and ``#`` comments ignored."""
+    out = []
+    with open(path, 'r', encoding='utf-8-sig') as f:
+        for line in f:
+            line = line.strip().strip('"')
+            if line and not line.startswith('#'):
+                out.append(paths.norm(line))
+    return out
+
+
+def parse_version(file_name: str, version_regex: str = '') -> str:
+    if not version_regex:
+        return ''
+    try:
+        m = re.search(version_regex, file_name)
+    except re.error:
+        return ''
+    if not m:
+        return ''
+    return m.group(1) if m.re.groups and m.group(1) is not None else m.group(0)
+
+
+def build_job(cfg: Mapping[str, Any], place_source: str, place_target: str, scripts: List[Any],
+              stamp: str = '', job_root: str = '', job_name: str = '', version_regex: str = '') -> Job:
+    """Build a Job (package description) - used by the GUI and the command line.
+
+    ``scripts``: paths, or ``(path, version)`` tuples. ``job_root`` / ``job_name`` default to the
+    settings templates (job.job_root / job.job_name_default) filled from the source place.
+    """
+    stamp = stamp or tokens_mod.timestamp()
+    base = tokens_mod.place_tokens(cfg, place_source, place_target, stamp)
+    job_name = job_name or tokens_mod.job_name(cfg, base)
+    job_root = paths.norm(job_root) or tokens_mod.job_root(cfg, base)
+    job_path = templates.join_template(job_root, job_name)
+    job = Job(job_name=job_name, job_path=job_path, timestamp=stamp,
+              place_source=place_source, place_target=place_target)
+    for item in scripts:
+        path, version = (item if isinstance(item, (tuple, list)) else (item, None))
+        path = paths.norm(path)
+        name = paths.basename(path)
+        if version is None:
+            version = parse_version(name, version_regex)
+        job.scripts.append(JobScript(
+            id=make_script_id(len(job.scripts), name), path=path, name=name, version=version or '',
+            tags=tokens_mod.script_tags(cfg, place_source, path),
+            tokens=tokens_mod.build_tokens(cfg, place_source, place_target, path, stamp, job_path, job_name)))
+    return job

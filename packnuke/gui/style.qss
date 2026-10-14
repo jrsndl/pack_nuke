@@ -1,18 +1,5 @@
-QLabel
-{
-    font-size: 10pt;
-}
-
-QCheckBox
-{
-    font-size: 10pt;
-}
-
-QRadioButton
-{
-    font-size: 10pt;
-}
-
+/* Font sizes are NOT set here: the application font (10pt) is set in code (app.py).
+   Changing font size/weight in a style sheet makes Qt mis-measure group box titles. */
 
 
 QListView:item:hover
@@ -23,21 +10,19 @@ QListView:item:hover
 
 QGroupBox
 {
-    font-weight: bold;
-    border: 1px solid gray; 
+    border: 1px solid gray;
     border-radius: 8px;
-    margin-top: 6px;
-   /* border-top-left-radius: 3px;
-    border-top-right-radius: 3px;*/
+    margin-top: 9px;      /* the title sits on the frame line */
+    padding-top: 12px;    /* contents start below the title */
 }
 
 QGroupBox::title
 {
-   /* background-color: transparent;*/
-   /* subcontrol-position: top left;*/
-    
+    /* bold is set in code (widgets.bold_group_titles): font changes in style sheets break the title metrics */
+    color: #e6e6e6;
     subcontrol-origin: margin;
-    padding:0px 5px;
+    left: 8px;
+    padding: 3px 5px 0px 5px;   /* top padding: room for the ascent of the title text */
 }
 
 
@@ -49,14 +34,12 @@ QToolTip
     padding: 4px;
     border-radius: 2px;
     opacity: 255;
-    font-size: 10pt;
 }
 
 QWidget
 {
     color: #b1b1b1;
     background-color: #323232;
-	font-size: 10pt;
 
 }
 
@@ -679,7 +662,6 @@ QSplitter::handle:hover
 QLabel#hint
 {
     color: #8a8a8a;
-    font-size: 9pt;
 }
 
 QLabel#ok

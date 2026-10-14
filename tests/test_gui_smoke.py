@@ -52,6 +52,12 @@ class GuiSmoke(unittest.TestCase):
         from PySide6 import QtCore, QtWidgets
         from packnuke.gui.app import setup_logging
         from packnuke.gui.main_window import MainWindow
+        # never open Explorer / Finder from the tests (the temp folders are deleted afterwards)
+        from packnuke.gui import tab_queue, tab_scripts, widgets
+        opened = []
+        for mod in (tab_queue, tab_scripts, widgets):
+            mod.reveal = opened.append
+        widgets.open_path = opened.append
         from packnuke.core import jobs
 
         QtWidgets.QApplication([])

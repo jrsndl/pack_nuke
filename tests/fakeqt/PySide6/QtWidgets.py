@@ -36,6 +36,13 @@ class QWidget(QObject):
     def style(self):
         return _Anything()
 
+    def font(self):
+        from .QtGui import QFont
+        return getattr(self, '_fq_font', None) or QFont()
+
+    def setFont(self, f):
+        self._fq_font = f
+
     def fontMetrics(self):
         class _FM:
             def height(self):

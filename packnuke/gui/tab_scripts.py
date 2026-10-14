@@ -89,6 +89,7 @@ class ScriptsTab(QtWidgets.QWidget):
         grid.addLayout(hbox(self.version_regex, self.regex_state), 1, 1)
         grid.addLayout(hbox(self.first_enabled, self.first_n, 16, self.last_enabled, self.last_n, None), 1, 2, 1, 2)
         filters_box = QtWidgets.QGroupBox('Filters (instant, no new search)')
+        filters_box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
         filters_box.setLayout(grid)
 
         self.model = ScriptTableModel(self)

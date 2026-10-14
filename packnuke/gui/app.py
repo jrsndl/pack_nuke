@@ -6,7 +6,7 @@ import logging.handlers
 import os
 import sys
 
-from PySide6 import QtWidgets
+from PySide6 import QtGui, QtWidgets
 
 
 def app_dir() -> str:
@@ -57,6 +57,9 @@ def main() -> int:
         importlib.import_module('ui_images_rc')  # registers the :/images/... resources
     except ImportError:
         pass
+    font = QtGui.QFont(app.font())
+    font.setPointSize(10)          # set in code, not in style.qss (see the note there)
+    app.setFont(font)
     qss = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'style.qss')
     if os.path.isfile(qss):
         with open(qss, 'r', encoding='utf-8') as f:

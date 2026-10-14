@@ -71,20 +71,27 @@ class PresetsTab(QtWidgets.QWidget):
         split.setSizes([300, 600])
 
         save_box = QtWidgets.QGroupBox('Save current state as preset')
-        save_box.setLayout(vbox(
-            hbox(label('Name:'), self.name, button('Save preset', self.save, object_name='primary')),
-            hint('A preset stores the complete settings (as edited in the GUI, saved or not) plus the search '
-                 'root, skip folders, depth, filters, version regex, first/last N and source/target place. '
-                 'After loading or saving a preset, the Settings tab saves into that preset.'), margins=6))
+        save_box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        save_note = label('Stores the complete settings, search, filters and places.', 'hint')
+        save_note.setToolTip('A preset stores the complete settings (as edited in the GUI, saved or not) plus the '
+                             'search root, skip folders, depth, filters, version regex, first/last N and '
+                             'source/target place.\nAfter loading or saving a preset, the Settings tab saves into '
+                             'that preset.')
+        save_box.setLayout(hbox(label('Name:'), self.name, button('Save preset', self.save, object_name='primary'),
+                                12, save_note, margins=6))
 
         help_texts.apply([
             (self.folder, 'Presets folder:'), (self.folder.edit, 'Presets folder:'), (self.list, 'Presets'),
             (self.details, 'Preset content'), (self.name, 'Name:'), (self.default_place, 'Default source place:')])
-        self.setLayout(vbox(
-            hbox(label('Presets folder:'), self.folder, button('Open', lambda: open_path(self.folder.text()))),
-            hint('The folder is stored in settings.ini (presets_folder). Share it between artists to share presets.'),
-            split, save_box,
-            hbox(label('Default source place:'), self.default_place, None), margins=6))
+        main = QtWidgets.QVBoxLayout(self)
+        main.setContentsMargins(6, 6, 6, 6)
+        main.addLayout(hbox(label('Presets folder:'), self.folder,
+                            button('Open', lambda: open_path(self.folder.text()))))
+        main.addWidget(hint('The folder is stored in settings.ini (presets_folder). Share it between artists to '
+                            'share presets.'))
+        main.addWidget(split, 1)        # all extra height goes to the preset list / content
+        main.addWidget(save_box, 0)
+        main.addLayout(hbox(label('Default source place:'), self.default_place, None))
         self.refresh()
 
     # ------------------------------------------------------------------ folder / list

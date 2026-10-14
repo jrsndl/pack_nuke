@@ -116,6 +116,8 @@ class QueueTab(QtWidgets.QWidget):
         self.job_folder_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
 
         grid = QtWidgets.QGridLayout()
+        grid.setVerticalSpacing(4)
+        grid.setContentsMargins(0, 0, 0, 0)
         grid.setColumnStretch(1, 1)
         grid.addWidget(label('Source place:'), 0, 0)
         grid.addLayout(hbox(self.place_source, label('→  Target place:'), self.place_target,
@@ -137,6 +139,7 @@ class QueueTab(QtWidgets.QWidget):
                                 'Write the job files and pack the first marked script on this machine with nuke -t')
         self.submit_btn = button('Send to Deadline', self.submit, object_name='primary')
         job_box = QtWidgets.QGroupBox('Package')
+        job_box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
         job_box.setLayout(vbox(grid, hbox(None, self.check_btn, self.write_btn, self.local_btn, self.submit_btn),
                                margins=6))
 
@@ -147,7 +150,10 @@ class QueueTab(QtWidgets.QWidget):
             (self.job_root.edit, 'Job root:'), (self.job_name, 'Job name:'),
             (self.job_folder_label, 'Job folder:'), (self.counts, 'Scripts in the queue / marked for packing'),
             (self.job_name_state, 'Result of the job name check (settings job.job_name_check)')])
-        self.setLayout(vbox(self.splitter, job_box, margins=6))
+        main = QtWidgets.QVBoxLayout(self)
+        main.setContentsMargins(6, 6, 6, 6)
+        main.addWidget(self.splitter, 1)   # all extra height goes to the table
+        main.addWidget(job_box, 0)
 
     # ------------------------------------------------------------------ places / job fields
     def _places_changed(self) -> None:
@@ -326,28 +332,12 @@ class QueueTab(QtWidgets.QWidget):
     # ------------------------------------------------------------------ checks and submission
     def _problems(self, for_submit: bool) -> List[str]:
         st = self.state
-        problems = settings_mod.errors_only(settings_mod.validate(st.settings))
+        problems = []
         if not st.settings_path:
-            problems.append('No settings file loaded (Settings tab).')
-        if st.place_source == st.place_target:
-            problems.append('Source and target place must differ.')
-        marked = [q for q in st.queue if q.marked]
-        if not marked:
-            problems.append('No marked scripts in the queue.')
-        if not self._validate_name():
-            problems.append('Job name "{}" is not valid ({}).'.format(self.job_name.text(), self.job_name_state.text()))
-        if not paths.is_absolute(self.job_root.text()):
-            problems.append('Job root "{}" is not an absolute path.'.format(self.job_root.text()))
-        for q in marked:
-            if not os.path.isfile(q.path):
-                problems.append('Script not found: {}'.format(q.path))
-        job_folder, job_name = self.job_folder(), self.job_name.text().strip()
-        seen = set()
-        for q in marked:
-            for p in preflight.check_templates(st.settings, st.script_tokens(q.path, job_folder, job_name)):
-                if p not in seen:
-                    seen.add(p)
-                    problems.append('{} ({})'.format(p, q.name))
+            problems.append('No settings loaded (Settings or Presets tab).')
+        self._validate_name()   # refresh the label next to the job name
+        job = st.build_job(self.job_folder(), self.job_name.text().strip())
+        problems.extend(preflight.check_job(st.settings, job))   # same checks as the command line
         if for_submit:
             problems.extend(deadline.check_executables(st.settings))
         return problems
